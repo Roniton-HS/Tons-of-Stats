@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var userList = make(map[string]map[string]float64)
+var userStatMap = make(map[string]map[string]float64)
 
 // Listens to messages sent in the result-spam channel
 func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
@@ -70,7 +70,7 @@ func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreat
 		stats[key] = floatValue
 	}
 
-	userList[message.Author.ID] = stats
+	userStatMap[message.Author.ID] = stats
 }
 
 // Schedules tasks to run at midnight
@@ -95,7 +95,7 @@ func sendDailyStats(session *discordgo.Session, channelID string) {
 	// Todo: make this nice
 
 	var output = ""
-	for userID, stats := range userList {
+	for userID, stats := range userStatMap {
 		user, err := session.GuildMember("1387198610935906305", userID)
 		if err != nil {
 			log.Printf("Failed get username: %v", err)
