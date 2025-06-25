@@ -6,24 +6,71 @@ import (
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
+var userList = make(map[string]map[string]float64)
+
 // Listens to messages sent in the result-spam channel
 func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	if strings.HasPrefix(message.Content, "stats") {
+		sendDailyStats(session, message.ChannelID)
+		return
+	}
 	if message.ChannelID != getChannelIDByName(session, message.GuildID, "result-spam") {
 		return
 	}
-
 	if !strings.HasPrefix(message.Content, "I've completed all the modes of #LoLdle today:") {
 		return
 	}
 
-	// Todo: save stats
-	sendMessage(session, message.ChannelID, "LOL, you suck!")
+	lines := strings.Split(message.Content, "\n")
+	stats := make(map[string]float64)
+	for i, line := range lines {
+		if i == 0 {
+			continue
+		}
 
-	log.Printf("Message found: %s by %s\n", message.Content, message.Author.Username)
+		// remove emoji
+		lineParts := strings.SplitN(line, " ", 2)
+		if len(lineParts) < 2 {
+			continue
+		}
+
+		remainingLine := lineParts[1]
+
+		// split key and value
+		dataParts := strings.SplitN(remainingLine, ":", 2)
+		if len(dataParts) < 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(dataParts[0])
+		value := strings.TrimSpace(dataParts[1])
+
+		isChecked := strings.HasSuffix(value, "✓")
+		if isChecked {
+			value = strings.TrimSuffix(value, "✓")
+			value = strings.TrimSpace(value)
+		}
+
+		intValue, err := strconv.Atoi(value)
+		if err != nil {
+			log.Printf("Failed to convert value '%s' to an integer: %v", value, err)
+			continue
+		}
+
+		floatValue := float64(intValue)
+		if isChecked {
+			floatValue -= 0.5
+		}
+
+		stats[key] = floatValue
+	}
+
+	userList[message.Author.ID] = stats
 }
 
 // Schedules tasks to run at midnight
@@ -39,10 +86,28 @@ func scheduleMidnight(session *discordgo.Session, channelID string) {
 
 			// Do this at midnight
 			// Todo: generate a message that displays the "elo" of all tracked users
-			// Todo: generate a message that compares the daily results of all tracked users
-			sendMessage(session, channelID, "It's midnight my dudes!")
+			sendDailyStats(session, channelID)
 		}
 	}()
+}
+
+func sendDailyStats(session *discordgo.Session, channelID string) {
+	// Todo: make this nice
+
+	var output = ""
+	for userID, stats := range userList {
+		user, err := session.GuildMember("1387198610935906305", userID)
+		if err != nil {
+			log.Printf("Failed get username: %v", err)
+		}
+
+		output += user.DisplayName() + ":\n"
+		for key, value := range stats {
+			output += fmt.Sprintf("%s: %g\n", key, value)
+		}
+		output += "\n"
+	}
+	sendMessage(session, channelID, output)
 }
 
 func sendMessage(session *discordgo.Session, channelID string, content string) {
