@@ -68,18 +68,23 @@ func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreat
 }
 
 // Schedules tasks to run at midnight
-func scheduleMidnight(session *discordgo.Session, channelID string) {
-	for {
-		now := time.Now()
-		nextMidnight := time.Date(
-			now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
-		)
-		durationUntilNextMidnight := time.Until(nextMidnight)
-		time.Sleep(durationUntilNextMidnight)
+func scheduleMidnight(job func()) {
+	now := time.Now()
+	midnight := time.Date(
+		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
+	)
 
-		// Do this at midnight
-		// TODO: generate a message that displays the "elo" of all tracked users
-		sendDailyStats(session, channelID)
+	timer := time.NewTimer(time.Until(midnight))
+	<-timer.C
+
+	// first job invocation at midnight
+	go job()
+
+	// repeat every 24 hours
+	ticker := time.NewTicker(24 * time.Hour)
+	for {
+		<-ticker.C
+		go job()
 	}
 }
 
@@ -155,8 +160,14 @@ func main() {
 		log.Fatal("Failed to open connection", err)
 	}
 
-	// TODO: don't hardcode server ID
-	go scheduleMidnight(session, getChannelIDByName(session, "1387198610935906305", "result-spam"))
+	go scheduleMidnight(func() {
+		// TODO: don't hardcode server ID
+		// TODO: generate a message that displays the "elo" of all tracked users
+		sendDailyStats(
+			session,
+			getChannelIDByName(session, "1387198610935906305", "result-spam"),
+		)
+	})
 
 	fmt.Println("Bot is running...")
 	select {}
