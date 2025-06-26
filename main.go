@@ -17,12 +17,20 @@ type User = string
 
 var userStats = make(map[User]Stats)
 
-// Listens to messages sent in the result-spam channel
-func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	if strings.HasPrefix(message.Content, "stats") {
-		sendDailyStats(session, message.ChannelID)
+// Handle requests for stat-display.
+
+// TODO: refactor to proper command
+func handleStatDisplay(session *Session, message *discordgo.MessageCreate) {
+	if strings.TrimSpace(message.Content) != "stats" {
 		return
-	} else if message.ChannelID != getChannelIDByName(session, message.GuildID, "result-spam") {
+	}
+
+	sendDailyStats(session, message.ChannelID)
+}
+
+// Handle LoLdle result messages and update user stats accordingly.
+func handleUserStats(session *Session, message *discordgo.MessageCreate) {
+	if ch, err := session.GetChannelID("result-spam"); err != nil || message.ChannelID != ch {
 		return
 	} else if !strings.HasPrefix(message.Content, "I've completed all the modes of #LoLdle today:") {
 		return
@@ -67,7 +75,7 @@ func onMessageCreate(session *discordgo.Session, message *discordgo.MessageCreat
 	userStats[message.Author.ID] = stats
 }
 
-// Schedules tasks to run at midnight
+// Schedules job to run daily at midnight
 func scheduleMidnight(job func()) {
 	now := time.Now()
 	midnight := time.Date(
@@ -88,14 +96,13 @@ func scheduleMidnight(job func()) {
 	}
 }
 
-func sendDailyStats(session *discordgo.Session, channelID string) {
-	// TODO: make this nice
-
+// TODO: make this nice
+func sendDailyStats(session *Session, chID string) {
 	str := ""
 	for userID, stats := range userStats {
-		user, err := session.GuildMember("1387198610935906305", userID)
+		user, err := session.GuildMember(ServerID, userID)
 		if err != nil {
-			log.Printf("Failed get username: %v", err)
+			log.Printf("Failed to get username: %v", err)
 		}
 
 		str += user.DisplayName() + ":\n"
@@ -104,34 +111,8 @@ func sendDailyStats(session *discordgo.Session, channelID string) {
 		}
 		str += "\n"
 	}
-	sendMessage(session, channelID, str)
-}
 
-func sendMessage(session *discordgo.Session, channelID string, content string) {
-	_, err := session.ChannelMessageSend(channelID, content)
-	if err != nil {
-		log.Printf("Failed to send message: %v", err)
-		return
-	}
-
-	log.Printf("Message sent to channel %s", channelID)
-}
-
-func getChannelIDByName(session *discordgo.Session, serverID string, channelName string) string {
-	channels, err := session.GuildChannels(serverID)
-	if err != nil {
-		log.Println("Failed to get channelID", err)
-		return ""
-	}
-
-	for _, ch := range channels {
-		if ch.Name == channelName {
-			return ch.ID
-		}
-	}
-
-	log.Println("No channel found with name: ", channelName)
-	return ""
+	session.SendMessage(chID, str)
 }
 
 func main() {
@@ -145,30 +126,27 @@ func main() {
 		log.Fatal("DISCORD_BOT_TOKEN not found in .env")
 	}
 
-	// create a new session
-	session, err := discordgo.New("Bot " + token)
-	if err != nil {
-		log.Fatal("Failed to create Discord session", err)
-	}
+	// create and initialize new session
+	session := NewSession(ServerID)
+	session.AddHandler(handleStatDisplay)
+	session.AddHandler(handleUserStats)
 
-	// register event handlers
-	session.AddHandler(onMessageCreate)
-
-	// open web socket connection
-	err = session.Open()
-	if err != nil {
+	if err := session.Open(); err != nil {
 		log.Fatal("Failed to open connection", err)
 	}
 
+	// schedule stat-messages
 	go scheduleMidnight(func() {
-		// TODO: don't hardcode server ID
+		chID, err := session.GetChannelID("result-spam")
+		if err != nil {
+			log.Printf("Invalid channel name: '%s'", "result-spam")
+			return
+		}
+
 		// TODO: generate a message that displays the "elo" of all tracked users
-		sendDailyStats(
-			session,
-			getChannelIDByName(session, "1387198610935906305", "result-spam"),
-		)
+		sendDailyStats(session, chID)
 	})
 
-	fmt.Println("Bot is running...")
+	log.Println("Bot is running...")
 	select {}
 }
