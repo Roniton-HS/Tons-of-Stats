@@ -15,13 +15,13 @@ type Session struct {
 	ServerID string
 }
 
-func NewSession(id string) *Session {
-	session, err := discordgo.New("Bot " + id)
+func NewSession(token string, sID string) *Session {
+	session, err := discordgo.New("Bot " + token)
 	if err != nil {
-		log.Fatal("Failed to create session", err)
+		log.Fatalf("Failed to create session: %v", err)
 	}
 
-	return &Session{session, id}
+	return &Session{session, sID}
 }
 
 func (s Session) GetChannelID(name string) (string, error) {

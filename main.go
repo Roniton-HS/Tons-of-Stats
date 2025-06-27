@@ -127,7 +127,7 @@ func main() {
 	}
 
 	// create and initialize new session
-	session := NewSession(ServerID)
+	session := NewSession(token, ServerID)
 	session.AddHandler(handleStatDisplay)
 	session.AddHandler(handleUserStats)
 
