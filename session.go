@@ -1,9 +1,8 @@
 package main
 
 import (
-	"log"
-
 	"github.com/bwmarrin/discordgo"
+	"github.com/charmbracelet/log"
 )
 
 // TODO: don't hardcode this
@@ -18,7 +17,7 @@ type Session struct {
 func NewSession(token string, sID string) *Session {
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
-		log.Fatalf("Failed to create session: %v", err)
+		log.Fatal("Failed to create session", "sID", sID, "err", err)
 	}
 
 	return &Session{session, sID}
@@ -42,10 +41,10 @@ func (s Session) GetChannelID(name string) (string, error) {
 func (s Session) SendMessage(chID string, content string) error {
 	_, err := s.ChannelMessageSend(chID, content)
 	if err != nil {
-		log.Printf("Failed to send message: %v", err)
+		log.Warn("Failed to send message", "chID", chID, "err", err)
 		return err
 	}
 
-	log.Printf("Message sent to channel %s", chID)
+	log.Info("Message sent", "chID", chID, "content", content)
 	return nil
 }

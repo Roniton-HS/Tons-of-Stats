@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
@@ -61,7 +61,7 @@ func handleUserStats(_ *discordgo.Session, message *discordgo.MessageCreate) {
 
 		intValue, err := strconv.Atoi(value)
 		if err != nil {
-			log.Printf("Failed to convert value '%s' to an integer: %v", value, err)
+			log.Warn("Conversion failed", value, err)
 			continue
 		}
 
@@ -100,10 +100,10 @@ func scheduleMidnight(job func()) {
 // TODO: make this nice
 func sendDailyStats(session *Session, chID string) {
 	str := ""
-	for userID, stats := range userStats {
-		user, err := session.GuildMember(ServerID, userID)
+	for uID, stats := range userStats {
+		user, err := session.GuildMember(session.ServerID, uID)
 		if err != nil {
-			log.Printf("Failed to get username: %v", err)
+			log.Warn("Failed to get user", "uID", uID, "err", err)
 		}
 
 		str += user.DisplayName() + ":\n"
@@ -117,14 +117,23 @@ func sendDailyStats(session *Session, chID string) {
 }
 
 func main() {
+	log.SetDefault(
+		log.NewWithOptions(nil, log.Options{
+			ReportCaller:    true,
+			ReportTimestamp: true,
+			TimeFormat:      time.Kitchen,
+			Level:           log.DebugLevel,
+		}),
+	)
+
 	err := godotenv.Load()
 	if err != nil {
-		log.Printf("No .env file found: %v", err)
+		log.Warn("No .env file present", "err", err)
 	}
 
 	token, ok := os.LookupEnv("DISCORD_BOT_TOKEN")
 	if !ok {
-		log.Fatal("DISCORD_BOT_TOKEN not found in .env")
+		log.Fatal("DISCORD_BOT_TOKEN not set")
 	}
 
 	// create and initialize new session
@@ -133,14 +142,14 @@ func main() {
 	session.AddHandler(handleUserStats)
 
 	if err := session.Open(); err != nil {
-		log.Fatalf("Failed to open connection: %v", err)
+		log.Fatal("Failed to open connection", "err", err)
 	}
 
 	// schedule stat-messages
 	go scheduleMidnight(func() {
 		chID, err := session.GetChannelID("result-spam")
 		if err != nil {
-			log.Printf("Invalid channel name: '%s'", "result-spam")
+			log.Warn("Invalid channel", "name", "result-spam")
 			return
 		}
 
@@ -148,6 +157,6 @@ func main() {
 		sendDailyStats(session, chID)
 	})
 
-	log.Println("Bot is running...")
+	log.Info("Running...")
 	select {}
 }
