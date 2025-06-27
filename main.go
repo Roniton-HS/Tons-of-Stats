@@ -16,11 +16,12 @@ type Stats = map[string]float64
 type User = string
 
 var userStats = make(map[User]Stats)
+var session *Session
 
 // Handle requests for stat-display.
-
+//
 // TODO: refactor to proper command
-func handleStatDisplay(session *Session, message *discordgo.MessageCreate) {
+func handleStatDisplay(_ *discordgo.Session, message *discordgo.MessageCreate) {
 	if strings.TrimSpace(message.Content) != "stats" {
 		return
 	}
@@ -29,7 +30,7 @@ func handleStatDisplay(session *Session, message *discordgo.MessageCreate) {
 }
 
 // Handle LoLdle result messages and update user stats accordingly.
-func handleUserStats(session *Session, message *discordgo.MessageCreate) {
+func handleUserStats(_ *discordgo.Session, message *discordgo.MessageCreate) {
 	if ch, err := session.GetChannelID("result-spam"); err != nil || message.ChannelID != ch {
 		return
 	} else if !strings.HasPrefix(message.Content, "I've completed all the modes of #LoLdle today:") {
@@ -118,21 +119,21 @@ func sendDailyStats(session *Session, chID string) {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Failed to load .env file", err)
+		log.Printf("No .env file found: %v", err)
 	}
 
-	token := os.Getenv("DISCORD_BOT_TOKEN")
-	if token == "" {
+	token, ok := os.LookupEnv("DISCORD_BOT_TOKEN")
+	if !ok {
 		log.Fatal("DISCORD_BOT_TOKEN not found in .env")
 	}
 
 	// create and initialize new session
-	session := NewSession(token, ServerID)
+	session = NewSession(token, ServerID)
 	session.AddHandler(handleStatDisplay)
 	session.AddHandler(handleUserStats)
 
 	if err := session.Open(); err != nil {
-		log.Fatal("Failed to open connection", err)
+		log.Fatalf("Failed to open connection: %v", err)
 	}
 
 	// schedule stat-messages
