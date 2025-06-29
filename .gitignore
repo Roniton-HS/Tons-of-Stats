@@ -20,4 +20,4 @@ _workspace
 *.iml
 
 .env
-
+*.sqlite

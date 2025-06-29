@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -10,39 +11,62 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Stats = map[string]float64
-type User = string
+type StatsToday struct {
+	*CmpStats
 
-var userStats = make(map[User]*CmpStats)
+	UserID    string
+	EloChange float64
+}
+
+var db *DB
 var session *Session
 
 // Handle requests for stat-display.
 //
 // TODO: refactor to proper command
-func handleStatDisplay(_ *discordgo.Session, message *discordgo.MessageCreate) {
-	if strings.TrimSpace(message.Content) != "stats" {
+func handleStatDisplay(_ *discordgo.Session, msg *discordgo.MessageCreate) {
+	if strings.TrimSpace(msg.Content) != "stats" {
 		return
 	}
 
-	sendDailyStats(session, message.ChannelID)
+	stats, err := db.GetStatsToday(msg.Author.ID)
+	if err != nil {
+		log.Warn("Stat retrieval failed", "chID", msg.ChannelID, "uID", msg.Author.ID, "err", err)
+		session.SendMessage(msg.ChannelID, "Sowwy, I could not retwieve your stats owO")
+		return
+	}
+
+	sb := strings.Builder{}
+	sb.Write(fmt.Appendf(nil, "Stats fow %s UwU:\n", msg.Member.Nick))
+	sb.Write([]byte(stats.String()))
+	sb.Write([]byte("\n"))
+
+	session.SendMessage(msg.ChannelID, sb.String())
 }
 
 // Handle LoLdle result messages and update user stats accordingly.
-func handleUserStats(_ *discordgo.Session, message *discordgo.MessageCreate) {
-	if ch, err := session.GetChannelID("result-spam"); err != nil || message.ChannelID != ch {
+func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
+	if ch, err := session.GetChannelID("result-spam"); err != nil || msg.ChannelID != ch {
 		return
-	} else if !strings.HasPrefix(message.Content, "I've completed all the modes of #LoLdle today:") {
+	} else if !strings.HasPrefix(msg.Content, "I've completed all the modes of #LoLdle today:") {
 		return
 	}
 
-	stats, err := ParseStats(message.Content)
+	stats, err := ParseStats(msg.Content)
 	if err != nil {
 		log.Error("Message parsing failed", "err", err)
-		// TODO: send error message
+		// TODO: error message
 		return
 	}
 
-	userStats[message.Author.ID] = stats
+	// TODO: elo calculation
+	if err := db.SetStatsToday(&StatsToday{stats, msg.Author.ID, 0}); err != nil {
+		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
+		session.MessageReactionAdd(msg.ChannelID, msg.ID, "❌")
+	} else {
+		log.Info("Daily stats recorded", "user", msg.Author.ID)
+		session.MessageReactionAdd(msg.ChannelID, msg.ID, "✅")
+	}
 }
 
 // Schedules job to run daily at midnight
@@ -66,23 +90,6 @@ func scheduleMidnight(job func()) {
 	}
 }
 
-// TODO: make this nice
-func sendDailyStats(session *Session, chID string) {
-	str := ""
-	for uID, stats := range userStats {
-		user, err := session.GuildMember(session.ServerID, uID)
-		if err != nil {
-			log.Warn("Failed to get user", "uID", uID, "err", err)
-		}
-
-		str += user.DisplayName() + ":\n"
-		str += stats.String()
-		str += "\n"
-	}
-
-	session.SendMessage(chID, str)
-}
-
 func main() {
 	log.SetDefault(
 		log.NewWithOptions(nil, log.Options{
@@ -103,6 +110,12 @@ func main() {
 		log.Fatal("DISCORD_BOT_TOKEN not set")
 	}
 
+	// open and configure database
+	db = NewDB()
+	if err := db.Setup(); err != nil {
+		log.Fatal("Failed to set up database", "err", err)
+	}
+
 	// create and initialize new session
 	session = NewSession(token, ServerID)
 	session.AddHandler(handleStatDisplay)
@@ -114,14 +127,13 @@ func main() {
 
 	// schedule stat-messages
 	go scheduleMidnight(func() {
-		chID, err := session.GetChannelID("result-spam")
+		_, err := session.GetChannelID("result-spam")
 		if err != nil {
 			log.Warn("Invalid channel", "name", "result-spam")
 			return
 		}
 
-		// TODO: generate a message that displays the "elo" of all tracked users
-		sendDailyStats(session, chID)
+		// TODO: stat display for all users
 	})
 
 	log.Info("Running...")
