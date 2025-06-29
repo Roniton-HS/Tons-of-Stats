@@ -78,11 +78,22 @@ func ParseStats(msg string) (*CmpStats, error) {
 			return nil, mErr
 		}
 
-		// Set field's value
+		// Validate and set field's value
+		if bytes.ContainsFunc(c.Value, func(r rune) bool {
+			return r < 48 || r > 57 // rune is outside of valid ASCII range
+		}) {
+			log.Warn("Illegal value", "category", string(c.Key), "value", string(c.Value))
+			return nil, mErr
+		}
+
 		iv, err := strconv.Atoi(string(c.Value))
 		if err != nil {
 			log.Warn("Conversion failed", "category", string(c.Key), "value", string(c.Value), "err", err)
 			return nil, cErr
+		}
+		if iv == 0 { // negative values are filtered by checking ASCII-range (see above)
+			log.Warn("Illegal value", "category", string(c.Key), "value", iv)
+			return nil, mErr
 		}
 		f.Set(reflect.ValueOf(iv))
 
