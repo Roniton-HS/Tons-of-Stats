@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ import (
 type Stats = map[string]float64
 type User = string
 
-var userStats = make(map[User]Stats)
+var userStats = make(map[User]*CmpStats)
 var session *Session
 
 // Handle requests for stat-display.
@@ -37,40 +35,11 @@ func handleUserStats(_ *discordgo.Session, message *discordgo.MessageCreate) {
 		return
 	}
 
-	stats := make(Stats)
-	for _, ln := range strings.Split(message.Content, "\n")[1:] {
-		// remove emoji
-		words := strings.SplitN(ln, " ", 2)
-		if len(words) < 2 {
-			continue
-		}
-
-		// split key and value
-		data := strings.SplitN(words[1], ":", 2)
-		if len(data) < 2 {
-			continue
-		}
-
-		key, value := strings.TrimSpace(data[0]), strings.TrimSpace(data[1])
-
-		isChecked := strings.HasSuffix(value, "✓")
-		if isChecked {
-			value = strings.TrimSuffix(value, "✓")
-			value = strings.TrimSpace(value)
-		}
-
-		intValue, err := strconv.Atoi(value)
-		if err != nil {
-			log.Warn("Conversion failed", value, err)
-			continue
-		}
-
-		floatValue := float64(intValue)
-		if isChecked {
-			floatValue -= 0.5
-		}
-
-		stats[key] = floatValue
+	stats, err := ParseStats(message.Content)
+	if err != nil {
+		log.Error("Message parsing failed", "err", err)
+		// TODO: send error message
+		return
 	}
 
 	userStats[message.Author.ID] = stats
@@ -107,9 +76,7 @@ func sendDailyStats(session *Session, chID string) {
 		}
 
 		str += user.DisplayName() + ":\n"
-		for key, value := range stats {
-			str += fmt.Sprintf("%s: %g\n", key, value)
-		}
+		str += stats.String()
 		str += "\n"
 	}
 
