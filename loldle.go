@@ -18,7 +18,7 @@ type Category struct {
 	Checked bool
 }
 
-type CmpStats struct {
+type LoldleStats struct {
 	Classic      int
 	Quote        int
 	Ability      int
@@ -28,21 +28,21 @@ type CmpStats struct {
 	SplashCheck  bool
 }
 
-func (c CmpStats) String() string {
+func (s LoldleStats) String() string {
 	return fmt.Sprintf(`Classics: %d
 Quote: %d
 Ability: %d
 Emoji: %d
 Splash: %d`,
-		c.Classic,
-		c.Quote,
-		c.Ability,
-		c.Emoji,
-		c.Splash,
+		s.Classic,
+		s.Quote,
+		s.Ability,
+		s.Emoji,
+		s.Splash,
 	)
 }
 
-func ParseStats(msg string) (*CmpStats, error) {
+func ParseStats(msg string) (*LoldleStats, error) {
 	mErr, cErr := errors.New("malformed message"), errors.New("internal conversion error")
 	lines := bytes.Split([]byte(msg), []byte("\n"))
 
@@ -70,7 +70,7 @@ func ParseStats(msg string) (*CmpStats, error) {
 	}
 
 	// Validate and convert parsed slice to proper struct
-	rv := reflect.ValueOf(&CmpStats{})
+	rv := reflect.ValueOf(&LoldleStats{})
 	for i, c := range categories {
 		log.Debug(fmt.Sprintf("Parsing category %d", i), "category", c)
 
@@ -106,7 +106,7 @@ func ParseStats(msg string) (*CmpStats, error) {
 		}
 	}
 
-	stats, ok := rv.Elem().Interface().(CmpStats)
+	stats, ok := rv.Elem().Interface().(LoldleStats)
 	if !ok {
 		log.Error("Conversion failed for `reflect.Value`")
 		return nil, cErr

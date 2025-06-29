@@ -13,10 +13,24 @@ import (
 )
 
 type StatsToday struct {
-	*CmpStats
+	*LoldleStats
 
 	UserID    string
 	EloChange float64
+}
+type StatsTotal struct {
+	UserID string
+
+	Classic      int
+	Quote        int
+	Ability      int
+	AbilityCheck int
+	Emoji        int
+	Splash       int
+	SplashCheck  int
+
+	DaysPlayed int
+	Elo        float64
 }
 
 var db *StatsDB
@@ -60,7 +74,9 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
-	// TODO: elo calculation
+	// TODO:
+	// + elo calculation
+	// + update total stats
 	if err := db.Today.Update(msg.Author.ID, &StatsToday{stats, msg.Author.ID, 0}); err != nil {
 		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
 		session.MessageReactionAdd(msg.ChannelID, msg.ID, "❌")

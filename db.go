@@ -23,10 +23,11 @@ type StatsDB struct {
 	db *sql.DB // Main database handle - used by contained connections
 
 	Today Table[*StatsToday]
+	Total Table[*StatsTotal]
 }
 
 func NewStatsDB(db *sql.DB) *StatsDB {
-	return &StatsDB{db, &TblToday{db}}
+	return &StatsDB{db, &TblToday{db}, &TblTotal{db}}
 }
 
 func (s *StatsDB) Close() {
@@ -35,9 +36,10 @@ func (s *StatsDB) Close() {
 
 func (s *StatsDB) Setup() error {
 	log.Info("Configuring database")
+	var stmt string
 
 	// Bootstrap table for daily stats
-	stmt := `
+	stmt = `
 	create table
 		if not exists
 		today (
@@ -57,6 +59,28 @@ func (s *StatsDB) Setup() error {
 		return err
 	}
 
+	// Bootstrap table for cumulative stats
+	stmt = `
+	create table
+		if not exists
+		total (
+			user_id       string not null primary key,
+			classic       int,
+			quote         int,
+			ability       int,
+			ability_check int,
+			emoji         int,
+			splash        int,
+			splash_check  int,
+			days_played   int,
+			elo           float64
+		);
+	`
+	if _, err := s.db.Exec(stmt); err != nil {
+		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
+		return err
+	}
+
 	return nil
 }
 
@@ -66,24 +90,24 @@ type TblToday struct {
 }
 
 func (tbl *TblToday) Get(id string) (*StatsToday, error) {
-	st := &StatsToday{&CmpStats{}, "", 0}
+	s := &StatsToday{&LoldleStats{}, "", 0}
 
 	row := tbl.db.QueryRow("select * from today where user_id = ?", id)
 	if err := row.Scan(
-		&st.UserID,
-		&st.Classic,
-		&st.Quote,
-		&st.Ability,
-		&st.AbilityCheck,
-		&st.Emoji,
-		&st.Splash,
-		&st.SplashCheck,
-		&st.EloChange,
+		&s.UserID,
+		&s.Classic,
+		&s.Quote,
+		&s.Ability,
+		&s.AbilityCheck,
+		&s.Emoji,
+		&s.Splash,
+		&s.SplashCheck,
+		&s.EloChange,
 	); err != nil {
 		return nil, err
 	}
 
-	return st, nil
+	return s, nil
 }
 
 func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
@@ -95,7 +119,7 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 
 	var stats []*StatsToday
 	for rows.Next() {
-		s := &StatsToday{&CmpStats{}, "", 0}
+		s := &StatsToday{&LoldleStats{}, "", 0}
 
 		if err := rows.Scan(
 			&s.UserID,
@@ -120,17 +144,7 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 func (tbl *TblToday) Update(id string, t *StatsToday) error {
 	stmt := `
 	insert into
-		today (
-			user_id,
-			classic,
-			quote,
-			ability,
-			ability_check,
-			emoji,
-			splash,
-			splash_check,
-			elo_change
-		)
+		today
 		values (?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
 
@@ -145,6 +159,90 @@ func (tbl *TblToday) Update(id string, t *StatsToday) error {
 		t.Splash,
 		t.SplashCheck,
 		t.EloChange,
+	); err != nil {
+		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
+		return err
+	}
+
+	return nil
+}
+
+// Represents a connection to the `total` table.
+type TblTotal struct {
+	db *sql.DB
+}
+
+func (tbl TblTotal) Get(id string) (*StatsTotal, error) {
+	s := &StatsTotal{}
+
+	row := tbl.db.QueryRow("select * from total where user_id = ?", id)
+	if err := row.Scan(
+		&s.UserID,
+		&s.Classic,
+		&s.Quote,
+		&s.Ability,
+		&s.AbilityCheck,
+		&s.Emoji,
+		&s.Splash,
+		&s.SplashCheck,
+		&s.DaysPlayed,
+		&s.Elo,
+	); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (tbl TblTotal) GetAll() ([]*StatsTotal, error) {
+	rows, err := tbl.db.Query("select * from total")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []*StatsTotal
+	for rows.Next() {
+		s := &StatsTotal{}
+
+		if err := rows.Scan(
+			&s.UserID,
+			&s.Classic,
+			&s.Quote,
+			&s.Ability,
+			&s.AbilityCheck,
+			&s.Emoji,
+			&s.Splash,
+			&s.SplashCheck,
+			&s.DaysPlayed,
+			&s.Elo,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return stats, nil
+}
+
+func (tbl TblTotal) Update(id string, t *StatsTotal) error {
+	stmt := `
+	insert into
+		total
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+	`
+
+	if _, err := tbl.db.Exec(
+		stmt,
+		t.UserID,
+		t.Classic,
+		t.Quote,
+		t.Ability,
+		t.AbilityCheck,
+		t.Emoji,
+		t.Splash,
+		t.SplashCheck,
+		t.DaysPlayed,
+		t.Elo,
 	); err != nil {
 		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
 		return err
