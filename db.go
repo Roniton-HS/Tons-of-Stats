@@ -8,20 +8,32 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type DB struct {
-	conn *sql.DB
+// Represents a connection to a table in the database for which a connection is
+// held. Tables are abstracted behind the interface to provide uniform access to
+// different tables with potentially different types for query parameters or
+// results.
+type Table[T any] interface {
+	Get(id string) (T, error)
+	GetAll() ([]T, error)
+	Update(id string, t T) error
 }
 
-func NewDB() *DB {
-	db, err := sql.Open("sqlite3", "stats.sqlite")
-	if err != nil {
-		log.Fatal("Failed to open database", "err", err)
-	}
+// Groups and exposes multiple connections to the same underlying database.
+type StatsDB struct {
+	db *sql.DB // Main database handle - used by contained connections
 
-	return &DB{db}
+	Today Table[*StatsToday]
 }
 
-func (db *DB) Setup() error {
+func NewStatsDB(db *sql.DB) *StatsDB {
+	return &StatsDB{db, &TblToday{db}}
+}
+
+func (s *StatsDB) Close() {
+	s.db.Close()
+}
+
+func (s *StatsDB) Setup() error {
 	log.Info("Configuring database")
 
 	// Bootstrap table for daily stats
@@ -40,7 +52,7 @@ func (db *DB) Setup() error {
 			elo_change    float64
 		);
 	`
-	if _, err := db.conn.Exec(stmt); err != nil {
+	if _, err := s.db.Exec(stmt); err != nil {
 		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
 		return err
 	}
@@ -48,31 +60,64 @@ func (db *DB) Setup() error {
 	return nil
 }
 
-// Gets the user's daily stats.
-func (db *DB) GetStatsToday(uID string) (*StatsToday, error) {
-	s := &StatsToday{&CmpStats{}, "", 0}
+// Represents a connection to the `today` table.
+type TblToday struct {
+	db *sql.DB
+}
 
-	row := db.conn.QueryRow("select * from today where user_id = ?", uID)
+func (tbl *TblToday) Get(id string) (*StatsToday, error) {
+	st := &StatsToday{&CmpStats{}, "", 0}
+
+	row := tbl.db.QueryRow("select * from today where user_id = ?", id)
 	if err := row.Scan(
-		&s.UserID,
-		&s.Classic,
-		&s.Quote,
-		&s.Ability,
-		&s.AbilityCheck,
-		&s.Emoji,
-		&s.Splash,
-		&s.SplashCheck,
-		&s.EloChange,
+		&st.UserID,
+		&st.Classic,
+		&st.Quote,
+		&st.Ability,
+		&st.AbilityCheck,
+		&st.Emoji,
+		&st.Splash,
+		&st.SplashCheck,
+		&st.EloChange,
 	); err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return st, nil
+}
+
+func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
+	rows, err := tbl.db.Query("select * from today")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []*StatsToday
+	for rows.Next() {
+		s := &StatsToday{&CmpStats{}, "", 0}
+
+		if err := rows.Scan(
+			&s.UserID,
+			&s.Classic,
+			&s.Quote,
+			&s.Ability,
+			&s.AbilityCheck,
+			&s.Emoji,
+			&s.Splash,
+			&s.SplashCheck,
+			&s.EloChange,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return stats, nil
 }
 
 // Update user's daily stats. Primary key conflicts indicate that the user's
 // stats have already been recorded.
-func (db *DB) SetStatsToday(stats *StatsToday) error {
+func (tbl *TblToday) Update(id string, t *StatsToday) error {
 	stmt := `
 	insert into
 		today (
@@ -89,19 +134,19 @@ func (db *DB) SetStatsToday(stats *StatsToday) error {
 		values (?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
 
-	if _, err := db.conn.Exec(
+	if _, err := tbl.db.Exec(
 		stmt,
-		stats.UserID,
-		stats.Classic,
-		stats.Quote,
-		stats.Ability,
-		stats.AbilityCheck,
-		stats.Emoji,
-		stats.Splash,
-		stats.SplashCheck,
-		stats.EloChange,
+		t.UserID,
+		t.Classic,
+		t.Quote,
+		t.Ability,
+		t.AbilityCheck,
+		t.Emoji,
+		t.Splash,
+		t.SplashCheck,
+		t.EloChange,
 	); err != nil {
-		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "stats", stats, "err", err)
+		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
 		return err
 	}
 

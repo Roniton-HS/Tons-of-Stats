@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+const LoldleHeader = "I've completed all the modes of #LoLdle today:"
+
 type Category struct {
 	Key     []byte
 	Value   []byte
@@ -44,7 +46,7 @@ func ParseStats(msg string) (*CmpStats, error) {
 	mErr, cErr := errors.New("malformed message"), errors.New("internal conversion error")
 	lines := bytes.Split([]byte(msg), []byte("\n"))
 
-	if !bytes.Equal(lines[0], []byte("I've completed all the modes of #LoLdle today:")) {
+	if !bytes.Equal(lines[0], []byte(LoldleHeader)) {
 		log.Warn("Invalid message start sequence", "msg", msg, "seq", lines[0])
 		return nil, mErr
 	}

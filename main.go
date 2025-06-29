@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -18,7 +19,7 @@ type StatsToday struct {
 	EloChange float64
 }
 
-var db *DB
+var db *StatsDB
 var session *Session
 
 // Handle requests for stat-display.
@@ -29,15 +30,15 @@ func handleStatDisplay(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
-	stats, err := db.GetStatsToday(msg.Author.ID)
+	stats, err := db.Today.Get(msg.Author.ID)
 	if err != nil {
 		log.Warn("Stat retrieval failed", "chID", msg.ChannelID, "uID", msg.Author.ID, "err", err)
-		session.SendMessage(msg.ChannelID, "Sowwy, I could not retwieve your stats owO")
+		session.SendMessage(msg.ChannelID, "Failed to retrieve your stats.")
 		return
 	}
 
 	sb := strings.Builder{}
-	sb.Write(fmt.Appendf(nil, "Stats fow %s UwU:\n", msg.Member.Nick))
+	sb.Write(fmt.Appendf(nil, "%s's stats for today:\n", msg.Member.Nick))
 	sb.Write([]byte(stats.String()))
 	sb.Write([]byte("\n"))
 
@@ -48,7 +49,7 @@ func handleStatDisplay(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	if ch, err := session.GetChannelID("result-spam"); err != nil || msg.ChannelID != ch {
 		return
-	} else if !strings.HasPrefix(msg.Content, "I've completed all the modes of #LoLdle today:") {
+	} else if !strings.HasPrefix(msg.Content, LoldleHeader) {
 		return
 	}
 
@@ -60,7 +61,7 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	}
 
 	// TODO: elo calculation
-	if err := db.SetStatsToday(&StatsToday{stats, msg.Author.ID, 0}); err != nil {
+	if err := db.Today.Update(msg.Author.ID, &StatsToday{stats, msg.Author.ID, 0}); err != nil {
 		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
 		session.MessageReactionAdd(msg.ChannelID, msg.ID, "❌")
 	} else {
@@ -110,22 +111,28 @@ func main() {
 		log.Fatal("DISCORD_BOT_TOKEN not set")
 	}
 
-	// open and configure database
-	db = NewDB()
+	// Database configuration
+	conn, err := sql.Open("sqlite3", "tons_of_stats.sqlite")
+	if err != nil {
+		log.Fatal("Failed to open database", "err", err)
+	}
+
+	db = NewStatsDB(conn)
 	if err := db.Setup(); err != nil {
 		log.Fatal("Failed to set up database", "err", err)
 	}
+	defer db.Close()
 
-	// create and initialize new session
+	// Discord session configuration
 	session = NewSession(token, ServerID)
 	session.AddHandler(handleStatDisplay)
 	session.AddHandler(handleUserStats)
 
 	if err := session.Open(); err != nil {
-		log.Fatal("Failed to open connection", "err", err)
+		log.Fatal("Failed to open session", "err", err)
 	}
 
-	// schedule stat-messages
+	// Automated message scheduling
 	go scheduleMidnight(func() {
 		_, err := session.GetChannelID("result-spam")
 		if err != nil {
@@ -133,7 +140,7 @@ func main() {
 			return
 		}
 
-		// TODO: stat display for all users
+		// TODO: stat display for all users, drop `today` table
 	})
 
 	log.Info("Running...")
