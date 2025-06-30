@@ -16,6 +16,8 @@ type Table[T any] interface {
 	Get(id string) (T, error)
 	GetAll() ([]T, error)
 	Update(id string, t T) error
+	Delete(id string) error
+	DeleteAll() error
 }
 
 // Groups and exposes multiple connections to the same underlying database.
@@ -139,8 +141,9 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 	return stats, nil
 }
 
-// Update user's daily stats. Primary key conflicts indicate that the user's
-// stats have already been recorded.
+// Updates the daily stats for the user with UserID `id`.
+// Primary key conflicts indicate that the user's stats have already been
+// recorded.
 func (tbl *TblToday) Update(id string, t *StatsToday) error {
 	stmt := `
 	insert into
@@ -167,12 +170,34 @@ func (tbl *TblToday) Update(id string, t *StatsToday) error {
 	return nil
 }
 
+func (tbl *TblToday) Delete(id string) error {
+	stmt := `delete from today where user_id = ?`
+
+	if _, err := tbl.db.Exec(stmt, id); err != nil {
+		log.Error("Failed to execute statement", "stmt")
+		return err
+	}
+
+	return nil
+}
+
+func (tbl *TblToday) DeleteAll() error {
+	stmt := `delete from today`
+
+	if _, err := tbl.db.Exec(stmt); err != nil {
+		log.Error("Failed to execute statement", "stmt")
+		return err
+	}
+
+	return nil
+}
+
 // Represents a connection to the `total` table.
 type TblTotal struct {
 	db *sql.DB
 }
 
-func (tbl TblTotal) Get(id string) (*StatsTotal, error) {
+func (tbl *TblTotal) Get(id string) (*StatsTotal, error) {
 	s := &StatsTotal{}
 
 	row := tbl.db.QueryRow("select * from total where user_id = ?", id)
@@ -194,7 +219,7 @@ func (tbl TblTotal) Get(id string) (*StatsTotal, error) {
 	return s, nil
 }
 
-func (tbl TblTotal) GetAll() ([]*StatsTotal, error) {
+func (tbl *TblTotal) GetAll() ([]*StatsTotal, error) {
 	rows, err := tbl.db.Query("select * from total")
 	if err != nil {
 		return nil, err
@@ -224,7 +249,11 @@ func (tbl TblTotal) GetAll() ([]*StatsTotal, error) {
 	return stats, nil
 }
 
-func (tbl TblTotal) Update(id string, t *StatsTotal) error {
+// Updates the cumulative stats for the user with UserID 'id'.
+// Calculations are not performed on the database side, i.e. the database value
+// is overwritten with the values in 't'. As such, updates to the current stats
+// need to be handled on the application side.
+func (tbl *TblTotal) Update(id string, t *StatsTotal) error {
 	stmt := `
 	insert into
 		total
@@ -245,6 +274,28 @@ func (tbl TblTotal) Update(id string, t *StatsTotal) error {
 		t.Elo,
 	); err != nil {
 		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func (tbl *TblTotal) Delete(id string) error {
+	stmt := `delete from total where user_id = ?`
+
+	if _, err := tbl.db.Exec(stmt, id); err != nil {
+		log.Error("Failed to execute statement", "stmt")
+		return err
+	}
+
+	return nil
+}
+
+func (tbl *TblTotal) DeleteAll() error {
+	stmt := `delete from total`
+
+	if _, err := tbl.db.Exec(stmt); err != nil {
+		log.Error("Failed to execute statement", "stmt")
 		return err
 	}
 
