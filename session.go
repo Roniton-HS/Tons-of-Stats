@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 )
@@ -35,7 +37,7 @@ func (s Session) GetChannelID(name string) (string, error) {
 		}
 	}
 
-	return "", nil
+	return "", fmt.Errorf("invalid channel name `%s`", name)
 }
 
 func (s Session) SendMessage(chID string, content string) error {
