@@ -66,10 +66,19 @@ func ParseStats(msg string) (*LoldleStats, error) {
 		key, value := f[1], f[2]
 		checked := len(f) > 3 && bytes.Equal(f[3], []byte("✓"))
 
-		categories = append(categories, Category{key[:len(key)-1], value, checked})
+		categories = append(categories, Category{
+			key[:len(key)-1], // remove trailing `:`
+			value,
+			checked,
+		})
 	}
 
-	// Validate and convert parsed slice to proper struct
+	if len(categories) != 5 {
+		log.Warn("Invalid category length", "want", 5, "got", len(categories))
+		return nil, mErr
+	}
+
+	// Convert parsed slice to proper struct
 	rv := reflect.ValueOf(&LoldleStats{})
 	for i, c := range categories {
 		log.Debug(fmt.Sprintf("Parsing category %d", i), "category", c)
