@@ -88,6 +88,8 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 
 // Schedules job to run daily at midnight
 func scheduleMidnight(job func()) {
+	log.Info("Scheduling job", "job", job)
+
 	now := time.Now()
 	midnight := time.Date(
 		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
@@ -97,12 +99,14 @@ func scheduleMidnight(job func()) {
 	<-timer.C
 
 	// first job invocation at midnight
+	log.Info("Running job", "job", job)
 	go job()
 
 	// repeat every 24 hours
 	ticker := time.NewTicker(24 * time.Hour)
 	for {
 		<-ticker.C
+		log.Info("Running job", "job", job)
 		go job()
 	}
 }
