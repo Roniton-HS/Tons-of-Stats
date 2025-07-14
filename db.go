@@ -92,7 +92,7 @@ type TblToday struct {
 }
 
 func (tbl *TblToday) Get(id string) (*StatsToday, error) {
-	s := &StatsToday{&LoldleStats{}, "", 0}
+	s := &StatsToday{}
 
 	row := tbl.db.QueryRow("select * from today where user_id = ?", id)
 	if err := row.Scan(
@@ -121,7 +121,7 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 
 	var stats []*StatsToday
 	for rows.Next() {
-		s := &StatsToday{&LoldleStats{}, "", 0}
+		s := &StatsToday{}
 
 		if err := rows.Scan(
 			&s.UserID,

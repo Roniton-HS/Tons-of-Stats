@@ -22,6 +22,15 @@ func NewSession(token string, sID string) *Session {
 	return &Session{session, sID}
 }
 
+func (s Session) GetUserName(id string) (string, error) {
+	member, err := s.GuildMember(s.ServerID, id)
+	if err != nil {
+		return "", err
+	}
+
+	return member.Nick, nil
+}
+
 func (s Session) GetChannelID(name string) (string, error) {
 	channels, err := s.GuildChannels(s.ServerID)
 	if err != nil {

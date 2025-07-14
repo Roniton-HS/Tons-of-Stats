@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
@@ -13,11 +15,54 @@ import (
 )
 
 type StatsToday struct {
-	*LoldleStats
+	UserID string
 
-	UserID    string
+	Classic      int
+	Quote        int
+	Ability      int
+	AbilityCheck bool
+	Emoji        int
+	Splash       int
+	SplashCheck  bool
+
 	EloChange float64
 }
+
+func (s *StatsToday) String() string {
+	name, err := session.GetUserName(s.UserID)
+	if err != nil {
+		return "Something went wrong :\\"
+	}
+
+	aChk, sChk := "", ""
+	if s.AbilityCheck {
+		aChk = "✔"
+	}
+	if s.SplashCheck {
+		sChk = "✔"
+	}
+
+	return fmt.Sprintf(
+		`%s
+%s
+Classic %d
+Quote   %d
+Ability %d %s
+Emoji   %d
+Splash  %d %s
+`,
+		fmt.Sprintf("\x1b\n%s", name),
+		strings.Repeat("─", utf8.RuneCountInString(name)),
+		s.Classic,
+		s.Quote,
+		s.Ability,
+		aChk,
+		s.Emoji,
+		s.Splash,
+		sChk,
+	)
+}
+
 type StatsTotal struct {
 	UserID string
 
@@ -46,17 +91,17 @@ func handleStatDisplay(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 
 	stats, err := db.Today.Get(msg.Author.ID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			session.SendMessage(msg.ChannelID, "No stats recorded today.")
+			return
+		}
+
 		log.Warn("Stat retrieval failed", "chID", msg.ChannelID, "uID", msg.Author.ID, "err", err)
 		session.SendMessage(msg.ChannelID, "Failed to retrieve your stats.")
 		return
 	}
 
-	sb := strings.Builder{}
-	sb.Write(fmt.Appendf(nil, "%s's stats for today:\n", msg.Member.Nick))
-	sb.Write([]byte(stats.String()))
-	sb.Write([]byte("\n"))
-
-	session.SendMessage(msg.ChannelID, sb.String())
+	session.SendMessage(msg.ChannelID, stats.String())
 }
 
 // Handle LoLdle result messages and update user stats accordingly.
@@ -64,10 +109,11 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	if ch, err := session.GetChannelID("result-spam"); err != nil || msg.ChannelID != ch {
 		return
 	} else if !strings.HasPrefix(msg.Content, LoldleHeader) {
+		// TODO: error message
 		return
 	}
 
-	stats, err := ParseStats(msg.Content)
+	lStats, err := ParseStats(msg.Content)
 	if err != nil {
 		log.Error("Message parsing failed", "err", err)
 		// TODO: error message
@@ -77,7 +123,19 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	// TODO:
 	// + elo calculation
 	// + update total stats
-	if err := db.Today.Update(msg.Author.ID, &StatsToday{stats, msg.Author.ID, 0}); err != nil {
+	sToday := &StatsToday{
+		msg.Author.ID,
+		lStats.Classic,
+		lStats.Quote,
+		lStats.Ability,
+		lStats.AbilityCheck,
+		lStats.Emoji,
+		lStats.Splash,
+		lStats.SplashCheck,
+		0,
+	}
+
+	if err := db.Today.Update(msg.Author.ID, sToday); err != nil {
 		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
 		session.MessageReactionAdd(msg.ChannelID, msg.ID, "❌")
 	} else {
