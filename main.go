@@ -144,24 +144,27 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	}
 }
 
-// Schedules job to run daily at midnight
-func scheduleMidnight(job func()) {
-	now := time.Now()
-	midnight := time.Date(
-		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
-	)
-	delay := time.Until(midnight)
-	log.Info("Scheduling job", "job", job, "delay", delay.Round(time.Second))
+// Schedules a job to be run repeatedly with the given start time and interval.
+// The job is always run at least once, after the start time has elapsed. If the
+// start time is in the past, the first invocation occurs immediately. If
+// interval is 0, the function exits after the first invocation.
+func schedule(start time.Time, interval time.Duration, job func()) {
+	delay := time.Until(start)
+	log.Info("Scheduling job", "delay", delay.Round(time.Second), "interval", interval, "job", job)
 
 	timer := time.NewTimer(delay)
 	<-timer.C
 
-	// first job invocation at midnight
+	// first job invocation
 	log.Info("Running job", "job", job)
 	go job()
 
-	// repeat every 24 hours
-	ticker := time.NewTicker(24 * time.Hour)
+	if interval == 0 {
+		return
+	}
+
+	// repeat
+	ticker := time.NewTicker(interval)
 	for {
 		<-ticker.C
 		log.Info("Running job", "job", job)
@@ -215,10 +218,14 @@ func main() {
 	}
 
 	// Automated message scheduling
-	go scheduleMidnight(func() {
-		_, err := session.GetChannelID("result-spam")
+	now := time.Now()
+	midnight := time.Date(
+		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
+	)
+	go schedule(midnight, 24*time.Hour, func() {
+		chID, err := session.GetChannelID("daily-stats")
 		if err != nil {
-			log.Warn("Invalid channel", "name", "result-spam")
+			log.Warn("Invalid channel", "name", "daily-stats")
 			return
 		}
 
