@@ -157,7 +157,10 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 
 	// first job invocation
 	log.Info("Running job", "job", job)
-	go job()
+	go func() {
+		job()
+		log.Info("Job complete", "job", job)
+	}()
 
 	if interval == 0 {
 		return
@@ -168,7 +171,10 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 	for {
 		<-ticker.C
 		log.Info("Running job", "job", job)
-		go job()
+		go func() {
+			job()
+			log.Info("Job complete", "job", job)
+		}()
 	}
 }
 
@@ -229,7 +235,21 @@ func main() {
 			return
 		}
 
-		// TODO: stat display for all users, drop `today` table
+		entries, err := db.Today.GetAll()
+		if err != nil {
+			log.Error("Failed to fetch", "table", "today", "err", err)
+		}
+
+		if len(entries) > 0 {
+			session.SendMessage(chID, "Today's Stats:")
+		}
+		for _, entry := range entries {
+			session.SendMessage(chID, entry.String())
+		}
+
+		if err := db.Today.DeleteAll(); err != nil {
+			log.Error("Failed to delete from table", "table", "today", "err", err)
+		}
 	})
 
 	log.Info("Running...")
