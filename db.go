@@ -136,6 +136,8 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 		); err != nil {
 			return nil, err
 		}
+
+		stats = append(stats, s)
 	}
 
 	return stats, nil
@@ -244,6 +246,8 @@ func (tbl *TblTotal) GetAll() ([]*StatsTotal, error) {
 		); err != nil {
 			return nil, err
 		}
+
+		stats = append(stats, s)
 	}
 
 	return stats, nil
