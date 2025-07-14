@@ -88,14 +88,14 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 
 // Schedules job to run daily at midnight
 func scheduleMidnight(job func()) {
-	log.Info("Scheduling job", "job", job)
-
 	now := time.Now()
 	midnight := time.Date(
 		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),
 	)
+	delay := time.Until(midnight)
+	log.Info("Scheduling job", "job", job, "delay", delay.Round(time.Second))
 
-	timer := time.NewTimer(time.Until(midnight))
+	timer := time.NewTimer(delay)
 	<-timer.C
 
 	// first job invocation at midnight
@@ -130,6 +130,10 @@ func main() {
 	if !ok {
 		log.Fatal("DISCORD_BOT_TOKEN not set")
 	}
+	server, ok := os.LookupEnv("SERVER_ID")
+	if !ok {
+		log.Fatal("SERVER_ID not set")
+	}
 
 	// Database configuration
 	conn, err := sql.Open("sqlite3", "tons_of_stats.sqlite")
@@ -144,7 +148,7 @@ func main() {
 	defer db.Close()
 
 	// Discord session configuration
-	session = NewSession(token, ServerID)
+	session = NewSession(token, server)
 	session.AddHandler(handleStatDisplay)
 	session.AddHandler(handleUserStats)
 

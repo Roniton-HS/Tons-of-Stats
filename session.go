@@ -7,9 +7,6 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// TODO: don't hardcode this
-const ServerID = "1387198610935906305"
-
 type Session struct {
 	*discordgo.Session
 
