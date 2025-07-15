@@ -92,16 +92,16 @@ func handleStatDisplay(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	stats, err := db.Today.Get(msg.Author.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			session.SendMessage(msg.ChannelID, "No stats recorded today.")
+			session.MsgSend(msg.ChannelID, "No stats recorded today.")
 			return
 		}
 
 		log.Warn("Stat retrieval failed", "chID", msg.ChannelID, "uID", msg.Author.ID, "err", err)
-		session.SendMessage(msg.ChannelID, "Failed to retrieve your stats.")
+		session.MsgSend(msg.ChannelID, "Failed to retrieve your stats.")
 		return
 	}
 
-	session.SendMessage(msg.ChannelID, stats.String())
+	session.MsgSend(msg.ChannelID, stats.String())
 }
 
 // Handle LoLdle result messages and update user stats accordingly.
@@ -137,10 +137,10 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 
 	if err := db.Today.Update(msg.Author.ID, sToday); err != nil {
 		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
-		session.MessageReactionAdd(msg.ChannelID, msg.ID, "❌")
+		session.MsgReact(msg.ChannelID, msg.ID, "❌")
 	} else {
 		log.Info("Daily stats recorded", "user", msg.Author.ID)
-		session.MessageReactionAdd(msg.ChannelID, msg.ID, "✅")
+		session.MsgReact(msg.ChannelID, msg.ID, "✅")
 	}
 }
 
@@ -216,8 +216,9 @@ func main() {
 
 	// Discord session configuration
 	session = NewSession(token, server)
-	session.AddHandler(handleStatDisplay)
-	session.AddHandler(handleUserStats)
+	// TODO: refactor to handlers and commands on Session
+	session.dcs.AddHandler(handleStatDisplay)
+	session.dcs.AddHandler(handleUserStats)
 
 	if err := session.Open(); err != nil {
 		log.Fatal("Failed to open session", "err", err)
@@ -241,10 +242,10 @@ func main() {
 		}
 
 		if len(entries) > 0 {
-			session.SendMessage(chID, "Today's Stats:")
+			session.MsgSend(chID, "Today's Stats:")
 		}
 		for _, entry := range entries {
-			session.SendMessage(chID, entry.String())
+			session.MsgSend(chID, entry.String())
 		}
 
 		if err := db.Today.DeleteAll(); err != nil {
