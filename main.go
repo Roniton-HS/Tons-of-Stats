@@ -150,7 +150,7 @@ func handleUserStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 // interval is 0, the function exits after the first invocation.
 func schedule(start time.Time, interval time.Duration, job func()) {
 	delay := time.Until(start)
-	log.Info("Scheduling job", "delay", delay.Round(time.Second), "interval", interval, "job", job)
+	log.Info("Scheduling job", "job", job, "delay", delay.Round(time.Second), "interval", interval)
 
 	timer := time.NewTimer(delay)
 	<-timer.C

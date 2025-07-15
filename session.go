@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
@@ -23,7 +24,21 @@ func NewSession(token string, sID string) *Session {
 }
 
 func (s Session) Open() error {
-	return s.dcs.Open()
+	var rdy sync.WaitGroup
+	rdy.Add(1)
+
+	session.dcs.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		log.Info("Session ready", "id", s.State.User.ID)
+		rdy.Done()
+	})
+
+	if err := s.dcs.Open(); err != nil {
+		return err
+	}
+
+	log.Info("Awaiting session ready")
+	rdy.Wait()
+	return nil
 }
 
 func (s Session) GetUserName(id string) (string, error) {
