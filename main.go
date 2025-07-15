@@ -112,12 +112,11 @@ func main() {
 
 	// Discord session configuration
 	session = NewSession(token, server)
-	if err := session.Open(); err != nil {
+	if err := session.Open(cmds); err != nil {
 		log.Fatal("Failed to open session", "err", err)
 	}
 
 	session.HandlerAdd("record-stats", recordStats)
-	session.HandlerAdd("display-stats", displayStats)
 
 	// Automated message scheduling
 	now := time.Now()

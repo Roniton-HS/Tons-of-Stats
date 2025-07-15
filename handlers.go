@@ -1,8 +1,6 @@
 package main
 
 import (
-	"database/sql"
-	"errors"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -47,27 +45,4 @@ func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		log.Info("Daily stats recorded", "user", msg.Author.ID)
 		session.MsgReact(msg.ChannelID, msg.ID, "✅")
 	}
-}
-
-// Handle requests for stat-display.
-//
-// TODO: refactor to proper command
-func displayStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
-	if strings.TrimSpace(msg.Content) != "stats" {
-		return
-	}
-
-	stats, err := db.Today.Get(msg.Author.ID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			session.MsgSend(msg.ChannelID, "No stats recorded today.")
-			return
-		}
-
-		log.Warn("Stat retrieval failed", "chID", msg.ChannelID, "uID", msg.Author.ID, "err", err)
-		session.MsgSend(msg.ChannelID, "Failed to retrieve your stats.")
-		return
-	}
-
-	session.MsgSend(msg.ChannelID, stats.String())
 }
