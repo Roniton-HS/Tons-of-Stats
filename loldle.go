@@ -28,20 +28,6 @@ type LoldleStats struct {
 	SplashCheck  bool
 }
 
-func (s LoldleStats) String() string {
-	return fmt.Sprintf(`Classics: %d
-Quote: %d
-Ability: %d
-Emoji: %d
-Splash: %d`,
-		s.Classic,
-		s.Quote,
-		s.Ability,
-		s.Emoji,
-		s.Splash,
-	)
-}
-
 func CanParse(msg string) bool {
 	lines := bytes.Split([]byte(msg), []byte("\n"))
 

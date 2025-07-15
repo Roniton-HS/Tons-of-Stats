@@ -14,29 +14,18 @@ func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
-	lStats, err := ParseStats(msg.Content)
+	parsed, err := ParseStats(msg.Content)
 	if err != nil {
 		log.Error("Message parsing failed", "err", err)
 		session.MsgReact(msg.ChannelID, msg.ID, "❓")
 		return
 	}
 
-	// TODO:
-	// + elo calculation
-	// + update total stats
-	sToday := &StatsToday{
-		msg.Author.ID,
-		lStats.Classic,
-		lStats.Quote,
-		lStats.Ability,
-		lStats.AbilityCheck,
-		lStats.Emoji,
-		lStats.Splash,
-		lStats.SplashCheck,
-		0,
-	}
+	// TODO: update total stats
+	stats := NewDailyStats(msg.Author.ID, parsed)
+	log.Info("Recording daily stats", "user", msg.Author.ID, "stats", stats)
 
-	if err := db.Today.Update(msg.Author.ID, sToday); err != nil {
+	if err := db.Today.Update(msg.Author.ID, stats); err != nil {
 		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
 		session.MsgReact(msg.ChannelID, msg.ID, "❌")
 	} else {

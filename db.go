@@ -24,8 +24,8 @@ type Table[T any] interface {
 type StatsDB struct {
 	db *sql.DB // Main database handle - used by contained connections
 
-	Today Table[*StatsToday]
-	Total Table[*StatsTotal]
+	Today Table[*DailyStats]
+	Total Table[*TotalStats]
 }
 
 func NewStatsDB(db *sql.DB) *StatsDB {
@@ -53,7 +53,7 @@ func (s *StatsDB) Setup() error {
 			emoji         int,
 			splash        int,
 			splash_check  bool,
-			elo_change    float64
+			elo_change    int
 		);
 	`
 	if _, err := s.db.Exec(stmt); err != nil {
@@ -75,7 +75,7 @@ func (s *StatsDB) Setup() error {
 			splash        int,
 			splash_check  int,
 			days_played   int,
-			elo           float64
+			elo           int default 1000
 		);
 	`
 	if _, err := s.db.Exec(stmt); err != nil {
@@ -91,8 +91,8 @@ type TblToday struct {
 	db *sql.DB
 }
 
-func (tbl *TblToday) Get(id string) (*StatsToday, error) {
-	s := &StatsToday{}
+func (tbl *TblToday) Get(id string) (*DailyStats, error) {
+	s := &DailyStats{}
 
 	row := tbl.db.QueryRow("select * from today where user_id = ?", id)
 	if err := row.Scan(
@@ -112,16 +112,16 @@ func (tbl *TblToday) Get(id string) (*StatsToday, error) {
 	return s, nil
 }
 
-func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
+func (tbl *TblToday) GetAll() ([]*DailyStats, error) {
 	rows, err := tbl.db.Query("select * from today")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var stats []*StatsToday
+	var stats []*DailyStats
 	for rows.Next() {
-		s := &StatsToday{}
+		s := &DailyStats{}
 
 		if err := rows.Scan(
 			&s.UserID,
@@ -146,7 +146,7 @@ func (tbl *TblToday) GetAll() ([]*StatsToday, error) {
 // Updates the daily stats for the user with UserID `id`.
 // Primary key conflicts indicate that the user's stats have already been
 // recorded.
-func (tbl *TblToday) Update(id string, t *StatsToday) error {
+func (tbl *TblToday) Update(id string, t *DailyStats) error {
 	stmt := `
 	insert into
 		today
@@ -199,8 +199,8 @@ type TblTotal struct {
 	db *sql.DB
 }
 
-func (tbl *TblTotal) Get(id string) (*StatsTotal, error) {
-	s := &StatsTotal{}
+func (tbl *TblTotal) Get(id string) (*TotalStats, error) {
+	s := &TotalStats{}
 
 	row := tbl.db.QueryRow("select * from total where user_id = ?", id)
 	if err := row.Scan(
@@ -221,16 +221,16 @@ func (tbl *TblTotal) Get(id string) (*StatsTotal, error) {
 	return s, nil
 }
 
-func (tbl *TblTotal) GetAll() ([]*StatsTotal, error) {
+func (tbl *TblTotal) GetAll() ([]*TotalStats, error) {
 	rows, err := tbl.db.Query("select * from total")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var stats []*StatsTotal
+	var stats []*TotalStats
 	for rows.Next() {
-		s := &StatsTotal{}
+		s := &TotalStats{}
 
 		if err := rows.Scan(
 			&s.UserID,
@@ -257,7 +257,7 @@ func (tbl *TblTotal) GetAll() ([]*StatsTotal, error) {
 // Calculations are not performed on the database side, i.e. the database value
 // is overwritten with the values in 't'. As such, updates to the current stats
 // need to be handled on the application side.
-func (tbl *TblTotal) Update(id string, t *StatsTotal) error {
+func (tbl *TblTotal) Update(id string, t *TotalStats) error {
 	stmt := `
 	insert into
 		total
