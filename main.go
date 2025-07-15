@@ -2,13 +2,13 @@ package main
 
 import (
 	"database/sql"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
+var env *Env
 var db *StatsDB
 var session *Session
 
@@ -51,9 +51,9 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 // Responsible for printing daily stats for all users, the current global
 // leaderboard standings, as well as resetting the recorded daily stats.
 func dailyReset() {
-	chID, err := session.GetChannelID("daily-stats")
+	chID, err := session.GetChannelID(env.StatsCh)
 	if err != nil {
-		log.Warn("Invalid channel", "name", "daily-stats")
+		log.Warn("Invalid channel", "name", env.StatsCh)
 		return
 	}
 
@@ -89,13 +89,9 @@ func main() {
 		log.Warn("Failed to load .env", "err", err)
 	}
 
-	token, ok := os.LookupEnv("DISCORD_BOT_TOKEN")
-	if !ok {
-		log.Fatal("DISCORD_BOT_TOKEN not set")
-	}
-	server, ok := os.LookupEnv("SERVER_ID")
-	if !ok {
-		log.Fatal("SERVER_ID not set")
+	env = NewEnv()
+	if env.IsProd {
+		log.SetLevel(log.InfoLevel)
 	}
 
 	// Database configuration
@@ -111,7 +107,7 @@ func main() {
 	defer db.Close()
 
 	// Discord session configuration
-	session = NewSession(token, server)
+	session = NewSession(env.Token, env.ServerID)
 	if err := session.Open(cmds); err != nil {
 		log.Fatal("Failed to open session", "err", err)
 	}

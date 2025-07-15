@@ -7,7 +7,7 @@ import (
 
 // Handle LoLdle result messages and update user stats accordingly.
 func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
-	if ch, err := session.GetChannelID("result-spam"); err != nil || msg.ChannelID != ch {
+	if ch, err := session.GetChannelID(env.ResultsCh); err != nil || msg.ChannelID != ch {
 		return
 	} else if !CanParse(msg.Content) {
 		log.Debug("Ignoring message", "user", msg.Author.ID, "msg", msg.Content)
