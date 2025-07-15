@@ -16,6 +16,8 @@ type Env struct {
 }
 
 func NewEnv() *Env {
+	log.Info("Setting up environment")
+
 	env := &Env{
 		ResultsCh: "result-spam",
 		StatsCh:   "daily-stats",

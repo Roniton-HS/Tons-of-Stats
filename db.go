@@ -176,7 +176,7 @@ func (tbl *TblToday) Delete(id string) error {
 	stmt := `delete from today where user_id = ?`
 
 	if _, err := tbl.db.Exec(stmt, id); err != nil {
-		log.Error("Failed to execute statement", "stmt")
+		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
 		return err
 	}
 
@@ -187,7 +187,7 @@ func (tbl *TblToday) DeleteAll() error {
 	stmt := `delete from today`
 
 	if _, err := tbl.db.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt")
+		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
 		return err
 	}
 
@@ -288,7 +288,7 @@ func (tbl *TblTotal) Delete(id string) error {
 	stmt := `delete from total where user_id = ?`
 
 	if _, err := tbl.db.Exec(stmt, id); err != nil {
-		log.Error("Failed to execute statement", "stmt")
+		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
 		return err
 	}
 
@@ -299,7 +299,7 @@ func (tbl *TblTotal) DeleteAll() error {
 	stmt := `delete from total`
 
 	if _, err := tbl.db.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt")
+		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
 		return err
 	}
 
