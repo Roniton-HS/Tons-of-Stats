@@ -12,6 +12,7 @@ type Session struct {
 	dcs *discordgo.Session
 
 	ServerID string
+	Handlers map[string]func()
 }
 
 func NewSession(token string, sID string) *Session {
@@ -20,14 +21,14 @@ func NewSession(token string, sID string) *Session {
 		log.Fatal("Failed to create session", "sID", sID, "err", err)
 	}
 
-	return &Session{session, sID}
+	return &Session{session, sID, make(map[string]func())}
 }
 
 func (s Session) Open() error {
 	var rdy sync.WaitGroup
 	rdy.Add(1)
 
-	session.dcs.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+	session.dcs.AddHandlerOnce(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Info("Session ready", "id", s.State.User.ID)
 		rdy.Done()
 	})
@@ -78,4 +79,24 @@ func (s Session) MsgSend(chID string, content string) error {
 
 func (s Session) MsgReact(chID string, msgID string, reaction string) error {
 	return s.dcs.MessageReactionAdd(chID, msgID, reaction)
+}
+
+// Adds an event handler and associates it with the given name. Names must be
+// unique to allow deleting them at a later point in time. Errors if a handler
+// for the given name already exists.
+func (s Session) HandlerAdd(name string, handler any) error {
+	if _, ok := s.Handlers[name]; ok {
+		return fmt.Errorf("handler for name `%s` already exists", name)
+	}
+
+	s.Handlers[name] = session.dcs.AddHandler(handler)
+	return nil
+}
+
+// Removes the event handler for the given name. Results in a noop if no handler
+// exists for the name.
+func (s Session) HandlerRemove(name string) {
+	if h, ok := s.Handlers[name]; ok {
+		h()
+	}
 }
