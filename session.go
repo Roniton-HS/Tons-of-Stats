@@ -27,6 +27,42 @@ func NewSession(token string, sID string) *Session {
 }
 
 func (s *Session) Open(cmds []Command) error {
+	if err := s.awaitReady(); err != nil {
+		return err
+	}
+
+	// Register generic handler for all slash-commands.
+	s.HandlerAdd("handle-command", func(dcs *discordgo.Session, i *discordgo.InteractionCreate) {
+		if h, ok := s.Commands[i.ApplicationCommandData().Name]; ok {
+			log.Info("Executing command", "name", i.ApplicationCommandData().Name)
+
+			s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction))
+		}
+	})
+
+	// Unregister old commands.
+	regCmds, err := s.dcs.ApplicationCommands(s.AppID, s.ServerID)
+	if err != nil {
+		log.Fatal("Failed to fetch registered commands", "err", err)
+	}
+
+	// PERF: only remove commands not in `cmds`
+	for _, c := range regCmds {
+		log.Debug("Unregistering left-over command", "id", c.ID, "name", c.Name)
+		s.dcs.ApplicationCommandDelete(s.AppID, s.ServerID, c.ID)
+	}
+
+	// Register commands.
+	for _, c := range cmds {
+		if err := s.CommandAdd(c); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Session) awaitReady() error {
 	var rdy sync.WaitGroup
 	rdy.Add(1)
 
@@ -45,22 +81,6 @@ func (s *Session) Open(cmds []Command) error {
 	log.Info("Awaiting session ready")
 	rdy.Wait()
 	s.HandlerRemove("session-ready")
-
-	// Register generic handler for all slash-commands.
-	s.HandlerAdd("handle-command", func(dcs *discordgo.Session, i *discordgo.InteractionCreate) {
-		if h, ok := s.Commands[i.ApplicationCommandData().Name]; ok {
-			log.Info("Executing command", "name", i.ApplicationCommandData().Name)
-
-			s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction))
-		}
-	})
-
-	// Register all predefined commands.
-	for _, c := range cmds {
-		if err := s.CommandAdd(c); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
