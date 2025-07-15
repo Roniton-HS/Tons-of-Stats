@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strings"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 )
@@ -11,15 +9,15 @@ import (
 func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	if ch, err := session.GetChannelID("result-spam"); err != nil || msg.ChannelID != ch {
 		return
-	} else if !strings.HasPrefix(msg.Content, LoldleHeader) {
-		// TODO: error message
+	} else if !CanParse(msg.Content) {
+		log.Debug("Ignoring message", "user", msg.Author.ID, "msg", msg.Content)
 		return
 	}
 
 	lStats, err := ParseStats(msg.Content)
 	if err != nil {
 		log.Error("Message parsing failed", "err", err)
-		// TODO: error message
+		session.MsgReact(msg.ChannelID, msg.ID, "❓")
 		return
 	}
 

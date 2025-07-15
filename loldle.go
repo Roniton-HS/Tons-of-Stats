@@ -42,18 +42,28 @@ Splash: %d`,
 	)
 }
 
-func ParseStats(msg string) (*LoldleStats, error) {
-	mErr, cErr := errors.New("malformed message"), errors.New("internal conversion error")
+func CanParse(msg string) bool {
 	lines := bytes.Split([]byte(msg), []byte("\n"))
 
 	if len(lines) < 6 {
 		log.Warn("Message too short", "msg", msg, "want", 6, "got", len(lines))
-		return nil, mErr
+		return false
 	}
 	if !bytes.Equal(lines[0], []byte(LoldleHeader)) {
 		log.Warn("Invalid message start sequence", "msg", msg, "seq", lines[0])
+		return false
+	}
+
+	return true
+}
+
+func ParseStats(msg string) (*LoldleStats, error) {
+	mErr, cErr := errors.New("malformed message"), errors.New("internal conversion error")
+	if !CanParse(msg) {
 		return nil, mErr
 	}
+
+	lines := bytes.Split([]byte(msg), []byte("\n"))
 
 	// Parse message into category-slice before conversion
 	categories := make([]Category, 0, 5)
