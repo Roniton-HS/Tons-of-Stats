@@ -23,7 +23,7 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 	timer := time.NewTimer(delay)
 	<-timer.C
 
-	// first job invocation
+	// First job invocation after initial delay.
 	log.Info("Running job", "job", job)
 	go func() {
 		job()
@@ -34,7 +34,7 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 		return
 	}
 
-	// repeat
+	// Repeat invocations on every tick.
 	ticker := time.NewTicker(interval)
 	for {
 		<-ticker.C
@@ -69,6 +69,9 @@ func dailyReset() {
 		session.MsgSend(chID, entry.String())
 	}
 
+	// TODO: leaderboard update
+
+	log.Info("Clearing daily stats")
 	if err := db.Today.DeleteAll(); err != nil {
 		log.Error("Failed to delete from table", "table", "today", "err", err)
 	}
@@ -112,7 +115,7 @@ func main() {
 		log.Fatal("Failed to open session", "err", err)
 	}
 
-	session.HandlerAdd("record-stats", recordStats)
+	session.HandlerAdd("record-stats", RecordStats)
 
 	// Automated message scheduling
 	now := time.Now()

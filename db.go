@@ -32,10 +32,12 @@ func NewStatsDB(db *sql.DB) *StatsDB {
 	return &StatsDB{db, &TblToday{db}, &TblTotal{db}}
 }
 
+// Closes the underlying database handle used for all connections.
 func (s *StatsDB) Close() {
 	s.db.Close()
 }
 
+// Configures the database, ensuring that all relevant tables exist.
 func (s *StatsDB) Setup() error {
 	log.Info("Configuring database")
 	var stmt string
@@ -75,7 +77,7 @@ func (s *StatsDB) Setup() error {
 			splash        int,
 			splash_check  int,
 			days_played   int,
-			elo           int default 1000
+			elo           int
 		);
 	`
 	if _, err := s.db.Exec(stmt); err != nil {
@@ -86,7 +88,7 @@ func (s *StatsDB) Setup() error {
 	return nil
 }
 
-// Represents a connection to the `today` table.
+// Represents a connection to the daily stats table.
 type TblToday struct {
 	db *sql.DB
 }
@@ -143,7 +145,8 @@ func (tbl *TblToday) GetAll() ([]*DailyStats, error) {
 	return stats, nil
 }
 
-// Updates the daily stats for the user with UserID `id`.
+// Updates the daily stats for the user with given id.
+//
 // Primary key conflicts indicate that the user's stats have already been
 // recorded.
 func (tbl *TblToday) Update(id string, t *DailyStats) error {
@@ -194,7 +197,7 @@ func (tbl *TblToday) DeleteAll() error {
 	return nil
 }
 
-// Represents a connection to the `total` table.
+// Represents a connection to the cumulative stats table.
 type TblTotal struct {
 	db *sql.DB
 }
@@ -253,10 +256,10 @@ func (tbl *TblTotal) GetAll() ([]*TotalStats, error) {
 	return stats, nil
 }
 
-// Updates the cumulative stats for the user with UserID 'id'.
-// Calculations are not performed on the database side, i.e. the database value
-// is overwritten with the values in 't'. As such, updates to the current stats
-// need to be handled on the application side.
+// Updates the cumulative stats for the user with the given id.
+//
+// The given stats replace the stored value - no calculations are performed on
+// the database side.
 func (tbl *TblTotal) Update(id string, t *TotalStats) error {
 	stmt := `
 	insert into

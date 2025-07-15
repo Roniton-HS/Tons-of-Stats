@@ -1,16 +1,20 @@
 package main
 
 import (
+	"database/sql"
+	"errors"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 )
 
 // Handle LoLdle result messages and update user stats accordingly.
-func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
+func RecordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 	if ch, err := session.GetChannelID(env.ResultsCh); err != nil || msg.ChannelID != ch {
+		log.Debug("Ignoring message", "uID", msg.Author.ID, "msg", msg.Content, "err", err)
 		return
 	} else if !CanParse(msg.Content) {
-		log.Debug("Ignoring message", "user", msg.Author.ID, "msg", msg.Content)
+		log.Debug("Ignoring message", "uID", msg.Author.ID, "msg", msg.Content, "reason", "not parsable")
 		return
 	}
 
@@ -21,15 +25,44 @@ func recordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
-	// TODO: update total stats
 	stats := NewDailyStats(msg.Author.ID, parsed)
-	log.Info("Recording daily stats", "user", msg.Author.ID, "stats", stats)
-
-	if err := db.Today.Update(msg.Author.ID, stats); err != nil {
-		log.Warn("Failed to record daily stats", "user", msg.Author.ID, "msg", msg.Content, "err", err)
+	if err := updateStats(stats); err != nil {
 		session.MsgReact(msg.ChannelID, msg.ID, "❌")
 	} else {
-		log.Info("Daily stats recorded", "user", msg.Author.ID)
 		session.MsgReact(msg.ChannelID, msg.ID, "✅")
 	}
+}
+
+// Updates the user's daily and total stats.
+//
+// WARN: Current implementation is not transactional and may leave database in a
+// broken state!
+func updateStats(daily *DailyStats) error {
+	log.Info("Updating daily stats", "uID", daily.UserID, "stats", daily)
+	if err := db.Today.Update(daily.UserID, daily); err != nil {
+		log.Warn("Update failed", "uID", daily.UserID, "err", err)
+		return err
+	}
+
+	total, err := db.Total.Get(daily.UserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			total = NewTotalStats(daily.UserID)
+		} else {
+			log.Error("Failed to fetch", "table", "total", "err", err)
+			return err
+		}
+	}
+
+	// Total stats can safely be updated here, since any violations (e.g. from
+	// multiple submissions) are caught during the first update.
+	total.Update(daily)
+
+	log.Info("Updating total stats", "uID", daily.UserID, "stats", total)
+	if err := db.Total.Update(daily.UserID, total); err != nil {
+		log.Warn("Update failed", "uID", total.UserID, "err", err)
+		return err
+	}
+
+	return nil
 }

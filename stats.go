@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // Calculates the change in user Elo resulting from the given stats.
@@ -163,5 +164,57 @@ type TotalStats struct {
 	SplashCheck  int
 
 	DaysPlayed int
-	Elo        float64
+	Elo        int
+}
+
+func NewTotalStats(uID string) *TotalStats {
+	return &TotalStats{UserID: uID, Elo: 1000}
+}
+
+func (s *TotalStats) String() string {
+	name, err := session.GetUserName(s.UserID)
+	if err != nil {
+		return "Something went wrong :\\"
+	}
+
+	return fmt.Sprintf(
+		`%s
+%s
+Classic    %.1f
+Quote      %.1f
+Ability    %.1f (%.2f)
+Emoji      %.1f
+Splash     %.1f (%.2f)
+Elo        %d
+`,
+		fmt.Sprintf("\x1b\n%s", name),
+		strings.Repeat("─", utf8.RuneCountInString(name)),
+		float32(s.Classic/s.DaysPlayed),
+		float32(s.Quote/s.DaysPlayed),
+		float32(s.Ability/s.DaysPlayed),
+		float32(s.AbilityCheck/s.DaysPlayed),
+		float32(s.Emoji/s.DaysPlayed),
+		float32(s.Splash/s.DaysPlayed),
+		float32(s.SplashCheck/s.DaysPlayed),
+		s.Elo,
+	)
+}
+
+func (s *TotalStats) Update(d *DailyStats) {
+	s.DaysPlayed += 1
+	s.Elo += d.EloChange
+	if s.Elo < 0 {
+		s.Elo = 0
+	}
+
+	s.Classic += d.Classic
+	s.Quote += d.Quote
+	s.Ability += d.Ability
+	s.Emoji += d.Emoji
+	s.Splash += d.Splash
+
+	// Fast inline bool->int casting (i.e. 0 / 1). Conversion to untyped pointer
+	// allows cast to *byte, which in turn allows cast to int.
+	s.AbilityCheck += int(*(*byte)(unsafe.Pointer(&d.AbilityCheck)))
+	s.SplashCheck += int(*(*byte)(unsafe.Pointer(&d.SplashCheck)))
 }
