@@ -80,17 +80,17 @@ func CalculateElo(l *LoldleStats) int {
 }
 
 type DailyStats struct {
-	UserID string
+	UserID string `db:"id"`
 
-	Classic      int
-	Quote        int
-	Ability      int
-	AbilityCheck bool
-	Emoji        int
-	Splash       int
-	SplashCheck  bool
+	Classic      int  `db:"classic"`
+	Quote        int  `db:"quote"`
+	Ability      int  `db:"ability"`
+	AbilityCheck bool `db:"ability_check"`
+	Emoji        int  `db:"emoji"`
+	Splash       int  `db:"splash"`
+	SplashCheck  bool `db:"splash_check"`
 
-	EloChange int
+	EloChange int `db:"elo_change"`
 }
 
 func NewDailyStats(uID string, l *LoldleStats) *DailyStats {
@@ -152,19 +152,33 @@ EloChange  %s%d
 	)
 }
 
+func (s *DailyStats) Scan() []any {
+	return []any{
+		&s.UserID,
+		&s.Classic,
+		&s.Quote,
+		&s.Ability,
+		&s.AbilityCheck,
+		&s.Emoji,
+		&s.Splash,
+		&s.SplashCheck,
+		&s.EloChange,
+	}
+}
+
 type TotalStats struct {
-	UserID string
+	UserID string `db:"id"`
 
-	Classic      int
-	Quote        int
-	Ability      int
-	AbilityCheck int
-	Emoji        int
-	Splash       int
-	SplashCheck  int
+	Classic      int `db:"classic"`
+	Quote        int `db:"quote"`
+	Ability      int `db:"ability"`
+	AbilityCheck int `db:"ability_check"`
+	Emoji        int `db:"emoji"`
+	Splash       int `db:"splash"`
+	SplashCheck  int `db:"splash_check"`
 
-	DaysPlayed int
-	Elo        int
+	DaysPlayed int `db:"days_played"`
+	Elo        int `db:"elo"`
 }
 
 func NewTotalStats(uID string) *TotalStats {
@@ -185,6 +199,7 @@ Quote      %.1f
 Ability    %.1f (%.2f)
 Emoji      %.1f
 Splash     %.1f (%.2f)
+DaysPlayed %d
 Elo        %d
 `,
 		fmt.Sprintf("\x1b\n%s", name),
@@ -196,8 +211,24 @@ Elo        %d
 		float32(s.Emoji/s.DaysPlayed),
 		float32(s.Splash/s.DaysPlayed),
 		float32(s.SplashCheck/s.DaysPlayed),
+		s.DaysPlayed,
 		s.Elo,
 	)
+}
+
+func (s *TotalStats) Scan() []any {
+	return []any{
+		&s.UserID,
+		&s.Classic,
+		&s.Quote,
+		&s.Ability,
+		&s.AbilityCheck,
+		&s.Emoji,
+		&s.Splash,
+		&s.SplashCheck,
+		&s.DaysPlayed,
+		&s.Elo,
+	}
 }
 
 func (s *TotalStats) Update(d *DailyStats) {

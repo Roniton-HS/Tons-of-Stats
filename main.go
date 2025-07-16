@@ -1,15 +1,14 @@
 package main
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
+var dal *DAL
 var env *Env
-var db *StatsDB
 var session *Session
 
 // Schedules a job to be run repeatedly with the given start time and interval.
@@ -57,7 +56,7 @@ func dailyReset() {
 		return
 	}
 
-	entries, err := db.Today.GetAll()
+	entries, err := dal.Today.GetAll()
 	if err != nil {
 		log.Error("Failed to fetch", "table", "today", "err", err)
 	}
@@ -72,7 +71,7 @@ func dailyReset() {
 	// TODO: leaderboard update
 
 	log.Info("Clearing daily stats")
-	if err := db.Today.DeleteAll(); err != nil {
+	if err := dal.Today.DeleteAll(); err != nil {
 		log.Error("Failed to delete from table", "table", "today", "err", err)
 	}
 }
@@ -98,16 +97,13 @@ func main() {
 	}
 
 	// Database configuration
-	conn, err := sql.Open("sqlite3", "tons_of_stats.sqlite")
+	db, err := NewDB("tons_of_stats.sqlite")
 	if err != nil {
-		log.Fatal("Failed to open database", "err", err)
-	}
-
-	db = NewStatsDB(conn)
-	if err := db.Setup(); err != nil {
-		log.Fatal("Failed to set up database", "err", err)
+		log.Fatal("Could not open database", "err", err)
 	}
 	defer db.Close()
+
+	dal = NewDAL(db)
 
 	// Discord session configuration
 	session = NewSession(env.Token, env.ServerID)

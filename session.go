@@ -43,7 +43,7 @@ func (s *Session) Open(cmds []Command) error {
 	// Unregister old commands.
 	regCmds, err := s.dcs.ApplicationCommands(s.AppID, s.ServerID)
 	if err != nil {
-		log.Fatal("Failed to fetch registered commands", "err", err)
+		return err
 	}
 
 	// PERF: only remove commands not in `cmds`
@@ -88,6 +88,7 @@ func (s *Session) awaitReady() error {
 func (s *Session) GetUserName(id string) (string, error) {
 	member, err := s.dcs.GuildMember(s.ServerID, id)
 	if err != nil {
+		log.Warn("Failed to get user name", "id", id, "err", err)
 		return "", err
 	}
 
@@ -97,6 +98,7 @@ func (s *Session) GetUserName(id string) (string, error) {
 func (s *Session) GetChannelID(name string) (string, error) {
 	channels, err := s.dcs.GuildChannels(s.ServerID)
 	if err != nil {
+		log.Warn("Failed to get channel ID", "name", name, "err", err)
 		return "", err
 	}
 

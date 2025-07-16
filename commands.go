@@ -27,7 +27,7 @@ var cmds = []Command{
 
 			var msg string
 
-			if stats, err := db.Today.Get(i.Member.User.ID); err != nil {
+			if stats, err := dal.Today.Get(i.Member.User.ID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					msg = "No stats recorded today."
 				} else {

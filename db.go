@@ -2,43 +2,43 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/log"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Represents a connection to a table in the database for which a connection is
-// held. Tables are abstracted behind the interface to provide uniform access to
-// different tables with potentially different types for query parameters or
-// results.
-type Table[T any] interface {
-	Get(id string) (T, error)
-	GetAll() ([]T, error)
-	Update(id string, t T) error
-	Delete(id string) error
-	DeleteAll() error
+type Tx interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 }
 
-// Groups and exposes multiple connections to the same underlying database.
-type StatsDB struct {
-	db *sql.DB // Main database handle - used by contained connections
-
-	Today Table[*DailyStats]
-	Total Table[*TotalStats]
+type DB struct {
+	Conn *sql.DB
 }
 
-func NewStatsDB(db *sql.DB) *StatsDB {
-	return &StatsDB{db, &TblToday{db}, &TblTotal{db}}
+func NewDB(fname string) (*DB, error) {
+	conn, err := sql.Open("sqlite3", "tons_of_stats.sqlite")
+	if err != nil {
+		return nil, fmt.Errorf("open failed: %v", err)
+	}
+
+	db := &DB{conn}
+	if err := db.Init(); err != nil {
+		return nil, fmt.Errorf("initialization failed: %v", err)
+	}
+
+	return db, nil
 }
 
 // Closes the underlying database handle used for all connections.
-func (s *StatsDB) Close() {
-	s.db.Close()
+func (db *DB) Close() {
+	db.Conn.Close()
 }
 
-// Configures the database, ensuring that all relevant tables exist.
-func (s *StatsDB) Setup() error {
+func (db *DB) Init() error {
 	log.Info("Configuring database")
 	var stmt string
 
@@ -47,7 +47,7 @@ func (s *StatsDB) Setup() error {
 	create table
 		if not exists
 		today (
-			user_id       string not null primary key,
+			id            string not null primary key,
 			classic       int,
 			quote         int,
 			ability       int,
@@ -58,7 +58,7 @@ func (s *StatsDB) Setup() error {
 			elo_change    int
 		);
 	`
-	if _, err := s.db.Exec(stmt); err != nil {
+	if _, err := db.Conn.Exec(stmt); err != nil {
 		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
 		return err
 	}
@@ -68,7 +68,7 @@ func (s *StatsDB) Setup() error {
 	create table
 		if not exists
 		total (
-			user_id       string not null primary key,
+			id            string not null primary key,
 			classic       int,
 			quote         int,
 			ability       int,
@@ -80,7 +80,7 @@ func (s *StatsDB) Setup() error {
 			elo           int
 		);
 	`
-	if _, err := s.db.Exec(stmt); err != nil {
+	if _, err := db.Conn.Exec(stmt); err != nil {
 		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
 		return err
 	}
@@ -88,223 +88,26 @@ func (s *StatsDB) Setup() error {
 	return nil
 }
 
-// Represents a connection to the daily stats table.
-type TblToday struct {
-	db *sql.DB
-}
+func (db *DB) Transactional(fn func(tx Tx) error) error {
+	log.Debug("Transaction start", "fn", fn)
 
-func (tbl *TblToday) Get(id string) (*DailyStats, error) {
-	s := &DailyStats{}
-
-	row := tbl.db.QueryRow("select * from today where user_id = ?", id)
-	if err := row.Scan(
-		&s.UserID,
-		&s.Classic,
-		&s.Quote,
-		&s.Ability,
-		&s.AbilityCheck,
-		&s.Emoji,
-		&s.Splash,
-		&s.SplashCheck,
-		&s.EloChange,
-	); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (tbl *TblToday) GetAll() ([]*DailyStats, error) {
-	rows, err := tbl.db.Query("select * from today")
+	tx, err := db.Conn.Begin()
 	if err != nil {
-		return nil, err
+		log.Debug("Transaction start failure", "fn", fn, "err", err)
+		return err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
 
-	var stats []*DailyStats
-	for rows.Next() {
-		s := &DailyStats{}
-
-		if err := rows.Scan(
-			&s.UserID,
-			&s.Classic,
-			&s.Quote,
-			&s.Ability,
-			&s.AbilityCheck,
-			&s.Emoji,
-			&s.Splash,
-			&s.SplashCheck,
-			&s.EloChange,
-		); err != nil {
-			return nil, err
-		}
-
-		stats = append(stats, s)
-	}
-
-	return stats, nil
-}
-
-// Updates the daily stats for the user with given id.
-//
-// Primary key conflicts indicate that the user's stats have already been
-// recorded.
-func (tbl *TblToday) Update(id string, t *DailyStats) error {
-	stmt := `
-	insert into
-		today
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?);
-	`
-
-	if _, err := tbl.db.Exec(
-		stmt,
-		t.UserID,
-		t.Classic,
-		t.Quote,
-		t.Ability,
-		t.AbilityCheck,
-		t.Emoji,
-		t.Splash,
-		t.SplashCheck,
-		t.EloChange,
-	); err != nil {
-		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
+	if err := fn(tx); err != nil {
+		log.Debug("Transaction internal failure", "fn", fn, "err", err)
 		return err
 	}
 
-	return nil
-}
-
-func (tbl *TblToday) Delete(id string) error {
-	stmt := `delete from today where user_id = ?`
-
-	if _, err := tbl.db.Exec(stmt, id); err != nil {
-		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
+	if err := tx.Commit(); err != nil {
+		log.Debug("Transaction commit failure", "fn", fn, "err", err)
 		return err
 	}
 
-	return nil
-}
-
-func (tbl *TblToday) DeleteAll() error {
-	stmt := `delete from today`
-
-	if _, err := tbl.db.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
-		return err
-	}
-
-	return nil
-}
-
-// Represents a connection to the cumulative stats table.
-type TblTotal struct {
-	db *sql.DB
-}
-
-func (tbl *TblTotal) Get(id string) (*TotalStats, error) {
-	s := &TotalStats{}
-
-	row := tbl.db.QueryRow("select * from total where user_id = ?", id)
-	if err := row.Scan(
-		&s.UserID,
-		&s.Classic,
-		&s.Quote,
-		&s.Ability,
-		&s.AbilityCheck,
-		&s.Emoji,
-		&s.Splash,
-		&s.SplashCheck,
-		&s.DaysPlayed,
-		&s.Elo,
-	); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (tbl *TblTotal) GetAll() ([]*TotalStats, error) {
-	rows, err := tbl.db.Query("select * from total")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var stats []*TotalStats
-	for rows.Next() {
-		s := &TotalStats{}
-
-		if err := rows.Scan(
-			&s.UserID,
-			&s.Classic,
-			&s.Quote,
-			&s.Ability,
-			&s.AbilityCheck,
-			&s.Emoji,
-			&s.Splash,
-			&s.SplashCheck,
-			&s.DaysPlayed,
-			&s.Elo,
-		); err != nil {
-			return nil, err
-		}
-
-		stats = append(stats, s)
-	}
-
-	return stats, nil
-}
-
-// Updates the cumulative stats for the user with the given id.
-//
-// The given stats replace the stored value - no calculations are performed on
-// the database side.
-func (tbl *TblTotal) Update(id string, t *TotalStats) error {
-	stmt := `
-	insert into
-		total
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-	`
-
-	if _, err := tbl.db.Exec(
-		stmt,
-		t.UserID,
-		t.Classic,
-		t.Quote,
-		t.Ability,
-		t.AbilityCheck,
-		t.Emoji,
-		t.Splash,
-		t.SplashCheck,
-		t.DaysPlayed,
-		t.Elo,
-	); err != nil {
-		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "entity", t, "err", err)
-		return err
-	}
-
-	return nil
-}
-
-func (tbl *TblTotal) Delete(id string) error {
-	stmt := `delete from total where user_id = ?`
-
-	if _, err := tbl.db.Exec(stmt, id); err != nil {
-		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
-		return err
-	}
-
-	return nil
-}
-
-func (tbl *TblTotal) DeleteAll() error {
-	stmt := `delete from total`
-
-	if _, err := tbl.db.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt", stmt, "err", err)
-		return err
-	}
-
+	log.Debug("Transaction complete", "fn", fn)
 	return nil
 }
