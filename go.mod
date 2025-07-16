@@ -1,4 +1,4 @@
-module Tons_of_Stats
+module tons-of-stats
 
 go 1.24
 
