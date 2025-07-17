@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/charmbracelet/log"
 )
@@ -33,7 +34,7 @@ type Repository[T Scanner] struct {
 	// List of database column names for T. Fields on T that are saved in the
 	// database must have a "db" struct-tag. All tagged fields should be returned
 	// by t.Scan().
-	columns []string
+	columns string
 
 	// Parametrized string inserted into VALUES-expressions with the appropriate
 	// number of parameters. The number of struct fields for a given Repository[T]
@@ -60,7 +61,7 @@ func makeRepository[T Scanner](conn Tx, tbl string) Repository[T] {
 		val = string(b[:len(b)-1])
 	}
 
-	return Repository[T]{conn, tbl, col, val}
+	return Repository[T]{conn, tbl, strings.Join(col, ","), val}
 }
 
 // Instantiate concrete value for T. Direct instantiation is not possible in
@@ -92,7 +93,7 @@ func (r *Repository[T]) Get(id string) (T, error) {
 		return t, err
 	}
 
-	log.Debug("Get complete", "tbl", r.Table, "id", id, "entity", &t)
+	log.Debug("Get complete", "tbl", r.Table, "id", id, "t", &t)
 	return t, nil
 }
 
@@ -136,17 +137,21 @@ func (r *Repository[T]) Create(id string, t T) error {
 	return nil
 }
 
-// FIX: UPDATE instead of UPSERT
 func (r *Repository[T]) Update(id string, t T) error {
-	log.Info("Upserting entity", "tbl", r.Table, "id", id, "entity", t)
-	stmt := fmt.Sprintf("insert or replace into %s values (%s)", r.Table, r.values)
+	log.Info("Updating entity", "tbl", r.Table, "id", id, "entity", t)
+	stmt := fmt.Sprintf("update %s set (%s) = (%s) where id = ?", r.Table, r.columns, r.values)
 
-	if _, err := r.conn.Exec(stmt, t.Scan()...); err != nil {
-		log.Error("Upsert failed", "tbl", r.Table, "id", id, "entity", t, "stmt", stmt, "err", err)
+	res, err := r.conn.Exec(stmt, append(t.Scan(), id)...)
+	if err != nil {
+		log.Error("Update failed", "tbl", r.Table, "id", id, "entity", t, "stmt", stmt, "err", err)
 		return err
 	}
+	if i, _ := res.RowsAffected(); i == 0 {
+		log.Error("Update failed", "tbl", r.Table, "id", id, "entity", t, "stmt", stmt, "err", "no rows affected")
+		return fmt.Errorf("no rows affected")
+	}
 
-	log.Debug("Upsert complete", "tbl", r.Table, "id", id, "entity", t)
+	log.Debug("Update complete", "tbl", r.Table, "id", id, "entity", t)
 	return nil
 }
 
