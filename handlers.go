@@ -8,7 +8,9 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// Handle LoLdle result messages and update user stats accordingly.
+// RecordStats acts as an event handler (see [discordgo.EventHandler]) to record
+// information about newly played LoLdle games. Irrelevant messages (i.e.
+// messages not containing game stats) are ignored.
 func RecordStats(dcs *discordgo.Session, msg *discordgo.MessageCreate) {
 	if msg.Author.ID == session.AppID {
 		log.Debug("Ignoring own message", "msgID", msg.ID)
@@ -28,6 +30,7 @@ func RecordStats(dcs *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
+	// Parse message as [DailyStats] for the message's author.
 	parsed, err := ParseStats(msg.Content)
 	if err != nil {
 		log.Error("Message parsing failed", "err", err)
@@ -35,6 +38,7 @@ func RecordStats(dcs *discordgo.Session, msg *discordgo.MessageCreate) {
 		return
 	}
 
+	// Update daily and total stats for the message's author.
 	stats := NewDailyStats(msg.Author.ID, parsed)
 	if err := updateStats(stats); err != nil {
 		session.MsgReact(msg.ChannelID, msg.ID, "❌")
@@ -43,11 +47,12 @@ func RecordStats(dcs *discordgo.Session, msg *discordgo.MessageCreate) {
 	}
 }
 
-// Updates the user's daily and total stats.
+// updateStats modifies the user's daily and total stats with the given stats.
 func updateStats(daily *DailyStats) error {
 	log.Info("Updating daily stats", "uID", daily.UserID, "stats", daily)
 
 	err := dal.DB.Transaction(func(tx Tx) error {
+		// Update daily stats if possible.
 		txToday := dal.Today.WithTx(tx)
 		if err := txToday.Create(daily.UserID, daily); err != nil {
 			return err
@@ -55,6 +60,8 @@ func updateStats(daily *DailyStats) error {
 
 		log.Info("Fetching total stats", "uID", daily.UserID)
 
+		// Get user's total stats or create new [TotalStats] if it's their first
+		// time playing.
 		txTotal := dal.Total.WithTx(tx)
 		total, err := txTotal.Get(daily.UserID)
 		if err != nil {
