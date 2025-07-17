@@ -9,12 +9,21 @@ import (
 )
 
 // Handle LoLdle result messages and update user stats accordingly.
-// TODO: ignore own messages
-func RecordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
-	if ch, err := session.GetChannelID(env.ResultsCh); err != nil || msg.ChannelID != ch {
-		log.Debug("Ignoring message", "uID", msg.Author.ID, "msg", msg.Content, "err", err)
+func RecordStats(dcs *discordgo.Session, msg *discordgo.MessageCreate) {
+	if msg.Author.ID == session.AppID {
+		log.Debug("Ignoring own message", "msgID", msg.ID)
 		return
-	} else if !CanParse(msg.Content) {
+	}
+
+	if ch, err := session.GetChannelID(env.ResultsCh); err != nil {
+		log.Debug("Ignoring message", "uID", msg.Author.ID, "err", err)
+		return
+	} else if ch != msg.ChannelID {
+		log.Debug("Ignoring message", "uID", msg.Author.ID, "targetlChID", ch, "msgChID", msg.ChannelID)
+		return
+	}
+
+	if !CanParse(msg.Content) {
 		log.Debug("Ignoring message", "uID", msg.Author.ID, "msg", msg.Content, "reason", "not parsable")
 		return
 	}
