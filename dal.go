@@ -129,11 +129,11 @@ func (r *Repository[T]) Create(id string, t T) error {
 	stmt := fmt.Sprintf("insert into %s values (%s)", r.Table, r.values)
 
 	if _, err := r.conn.Exec(stmt, t.Scan()...); err != nil {
-		log.Error("Update failed", "tbl", r.Table, "id", id, "entity", t, "stmt", stmt, "err", err)
+		log.Error("Create failed", "tbl", r.Table, "id", id, "entity", t, "stmt", stmt, "err", err)
 		return err
 	}
 
-	log.Debug("Update complete", "tbl", r.Table, "id", id, "entity", t)
+	log.Debug("Create complete", "tbl", r.Table, "id", id, "entity", t)
 	return nil
 }
 

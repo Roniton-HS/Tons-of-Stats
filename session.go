@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -35,7 +36,6 @@ func (s *Session) Open(cmds []Command) error {
 	s.HandlerAdd("handle-command", func(dcs *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := s.Commands[i.ApplicationCommandData().Name]; ok {
 			log.Info("Executing command", "name", i.ApplicationCommandData().Name)
-
 			s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction))
 		}
 	})
@@ -147,8 +147,17 @@ func (s *Session) HandlerAdd(name string, handler any) error {
 		return fmt.Errorf("handler for name `%s` already exists", name)
 	}
 
+	rv := reflect.ValueOf(handler)
+	rt := rv.Type()
+	// Wrap handler to add generic logging.
+	fn := reflect.MakeFunc(rt, func(in []reflect.Value) []reflect.Value {
+		log.Info("Executing handler", "name", name)
+		rv.Call(in)
+		return nil
+	}).Interface()
+
 	log.Debug("Handler registered", "name", name)
-	s.Handlers[name] = s.dcs.AddHandler(handler)
+	s.Handlers[name] = s.dcs.AddHandler(fn)
 	return nil
 }
 

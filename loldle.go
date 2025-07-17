@@ -36,7 +36,7 @@ func CanParse(msg string) bool {
 		return false
 	}
 	if !bytes.Equal(lines[0], []byte(LoldleHeader)) {
-		log.Warn("Invalid message start sequence", "msg", msg, "seq", lines[0])
+		log.Warn("Invalid message start sequence", "msg", msg, "seq", string(lines[0]))
 		return false
 	}
 
