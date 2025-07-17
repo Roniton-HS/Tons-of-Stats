@@ -11,10 +11,13 @@ var dal *DAL
 var env *Env
 var session *Session
 
-// Schedules a job to be run repeatedly with the given start time and interval.
-// The job is always run at least once, after the start time has elapsed. If the
+// schedule registers a job (i.e. callback) to be run repeatedly. The first
+// invocation happens at start, from where on out the job is invoked at the
+// given interval.
+//
+// The job is always run at least once, when the start time elapses. If the
 // start time is in the past, the first invocation occurs immediately. If
-// interval is 0, the function exits after the first invocation.
+// interval is 0, the function exits after this first invocation.
 func schedule(start time.Time, interval time.Duration, job func()) {
 	delay := time.Until(start)
 	log.Info("Scheduling job", "job", job, "delay", delay.Round(time.Second), "interval", interval)
@@ -45,10 +48,11 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 	}
 }
 
-// Work to be performed once every day at midnight.
+// dailyReset specifies the work to be performed by the bot once a day at
+// midnight.
 //
-// Responsible for printing daily stats for all users, the current global
-// leaderboard standings, as well as resetting the recorded daily stats.
+// The job is responsible for printing daily stats for all users, the current
+// global leaderboard standings, as well as resetting the recorded daily stats.
 func dailyReset() {
 	chID, err := session.GetChannelID(env.StatsCh)
 	if err != nil {
@@ -56,6 +60,7 @@ func dailyReset() {
 		return
 	}
 
+	// Get all stats recorded today and create messages for each.
 	entries, err := dal.Today.GetAll()
 	if err != nil {
 		log.Error("Failed to fetch", "table", "today", "err", err)
@@ -70,6 +75,9 @@ func dailyReset() {
 
 	// TODO: leaderboard update
 
+	// Delete all entries from the daily stats table. This is necessary, since we
+	// use primary key conflicts on the database side instead of a separate data
+	// structure to detect repeat submissions within the same day.
 	log.Info("Clearing daily stats")
 	if err := dal.Today.DeleteAll(); err != nil {
 		log.Error("Failed to delete from table", "table", "today", "err", err)

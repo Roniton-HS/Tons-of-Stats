@@ -8,12 +8,21 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// Handler represents a handler for a [*discordgo.ApplicationCommand].
+//
+// Handlers are called with the user interaction itself (i.e.
+// [*discordgo.Interaction]), not the usual [*discordgo.InteractionCreate].
 type Handler func(*discordgo.Session, *discordgo.Interaction) *discordgo.InteractionResponse
+
+// Command wraps a [*discordgo.ApplicationCommand], containing both the command
+// definition itself, as well as the corresponding event handler in form of a
+// [Handler] (see also [discordgo.EventHandler]).
 type Command struct {
 	Definition *discordgo.ApplicationCommand
 	Handler    Handler
 }
 
+// List of all application commands to register at startup.
 var cmds = []Command{
 	{
 		Definition: &discordgo.ApplicationCommand{
@@ -27,6 +36,7 @@ var cmds = []Command{
 
 			var msg string
 
+			// Fetch current daily stats for the member invoking the command.
 			if stats, err := dal.Today.Get(i.Member.User.ID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					msg = "No stats recorded today."

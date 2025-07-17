@@ -3,18 +3,39 @@ package main
 import (
 	"os"
 
+	_ "github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 )
 
 type Env struct {
-	IsProd   bool
-	Token    string
+	// IsProd reports whether the bot is running in a production environment. This
+	// is true if, and only if, the environment variable "PROD" is equal to "1".
+	IsProd bool
+
+	// Bot token for the discord api WITHOUT a "Bot "-prefix.
+	//
+	// Read from DISCORD_BOT_TOKEN.
+	Token string
+
+	// Server ID to try and connect to (see [discordgo.Guild]).
+	//
+	// Read from SERVER_ID.
 	ServerID string
 
+	// Name of the channel to listen for results (see [LoldleStats]) in.
+	//
+	// Read from RESULT_CHANNEL.
 	ResultsCh string
-	StatsCh   string
+
+	// Name of the channel to use for posting daily results and leaderboards.
+	//
+	// Read from STATS_CHANNEL.
+	StatsCh string
 }
 
+// NewEnv creates a new [*Env], reading required values from the environment.
+// Where possible, this function provides more-or-less (probably less) sensible
+// defaults.
 func NewEnv() *Env {
 	log.Info("Setting up environment")
 

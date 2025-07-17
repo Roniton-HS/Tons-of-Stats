@@ -9,15 +9,29 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// Session is a connection to a [*discordgo.Session] with additional metadata as
+// well as all registered event handlers (see [discordgo.EventHandler])
+// slash-commands (see [discordgo.ApplicationCommand]).
 type Session struct {
+	// The underlying session.
 	dcs *discordgo.Session
 
-	AppID    string
+	// Application ID associated with the bot.
+	AppID string
+
+	// Server ID the session is connected to (see [discordgo.Guild]).
 	ServerID string
+
+	// Maps registered event handler names to their cancellation callbacks (see
+	// [discordgo.Session.AddHandler]).
 	Handlers map[string]func()
+
+	// Maps registered command names to their handler functions.
 	Commands map[string]Handler
 }
 
+// NewSession creates a new session, connecting the application to the given
+// server.
 func NewSession(token string, sID string) *Session {
 	dcs, err := discordgo.New("Bot " + token)
 	if err != nil {
@@ -27,6 +41,7 @@ func NewSession(token string, sID string) *Session {
 	return &Session{dcs, "", sID, make(map[string]func()), make(map[string]Handler)}
 }
 
+// Open configures the underlying session.
 func (s *Session) Open(cmds []Command) error {
 	if err := s.awaitReady(); err != nil {
 		return err
@@ -62,6 +77,8 @@ func (s *Session) Open(cmds []Command) error {
 	return nil
 }
 
+// awaitReady starts initialization of the underlying session and synchronously
+// waits for the initialization to finish.
 func (s *Session) awaitReady() error {
 	var rdy sync.WaitGroup
 	rdy.Add(1)
@@ -85,6 +102,7 @@ func (s *Session) awaitReady() error {
 	return nil
 }
 
+// GetUserName returns the server-local nickname for the user with the given ID.
 func (s *Session) GetUserName(id string) (string, error) {
 	member, err := s.dcs.GuildMember(s.ServerID, id)
 	if err != nil {
@@ -95,6 +113,7 @@ func (s *Session) GetUserName(id string) (string, error) {
 	return member.Nick, nil
 }
 
+// GetChannelID returns the ID for the channel with the given name.
 func (s *Session) GetChannelID(name string) (string, error) {
 	channels, err := s.dcs.GuildChannels(s.ServerID)
 	if err != nil {
@@ -111,6 +130,7 @@ func (s *Session) GetChannelID(name string) (string, error) {
 	return "", fmt.Errorf("invalid channel name `%s`", name)
 }
 
+// MsgSend sends a message with contents content to the channel with ID chID.
 func (s *Session) MsgSend(chID string, content string) error {
 	if _, err := s.dcs.ChannelMessageSend(chID, content); err != nil {
 		log.Warn("Failed to send message", "chID", chID, "err", err)
@@ -121,10 +141,13 @@ func (s *Session) MsgSend(chID string, content string) error {
 	return nil
 }
 
+// MsgReact adds a reaction to the given message, in the given channel.
 func (s *Session) MsgReact(chID string, msgID string, reaction string) error {
 	return s.dcs.MessageReactionAdd(chID, msgID, reaction)
 }
 
+// CommandAdd adds a new slash-command (see [discordgo.ApplicationCommand]) from
+// a [Command].
 func (s *Session) CommandAdd(cmd Command) error {
 	if _, ok := s.Commands[cmd.Definition.Name]; ok {
 		return fmt.Errorf("command with name `%s` already exists", cmd.Definition.Name)
@@ -139,9 +162,9 @@ func (s *Session) CommandAdd(cmd Command) error {
 	return nil
 }
 
-// Adds an event handler and associates it with the given name. Names must be
-// unique to allow deleting them at a later point in time. Errors if a handler
-// for the given name already exists.
+// HandlerAdd adds an event handler and associates it with the given name. Names
+// must be unique to allow deleting them at a later point in time. Errors if a
+// handler for the given name already exists.
 func (s *Session) HandlerAdd(name string, handler any) error {
 	if _, ok := s.Handlers[name]; ok {
 		return fmt.Errorf("handler for name `%s` already exists", name)
@@ -149,7 +172,8 @@ func (s *Session) HandlerAdd(name string, handler any) error {
 
 	rv := reflect.ValueOf(handler)
 	rt := rv.Type()
-	// Wrap handler to add generic logging.
+
+	// Wrap handler to allow generic logging for all handlers.
 	fn := reflect.MakeFunc(rt, func(in []reflect.Value) []reflect.Value {
 		log.Info("Executing handler", "name", name)
 		rv.Call(in)
@@ -161,8 +185,8 @@ func (s *Session) HandlerAdd(name string, handler any) error {
 	return nil
 }
 
-// Removes the event handler for the given name. Results in a noop if no handler
-// exists for the name.
+// HandlerRemove removes the event handler for the given name. Results in a noop
+// if no handler exists for the name.
 func (s *Session) HandlerRemove(name string) {
 	if h, ok := s.Handlers[name]; ok {
 		log.Debug("Handler removed", "name", name)

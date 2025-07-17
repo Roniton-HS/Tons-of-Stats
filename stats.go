@@ -7,9 +7,9 @@ import (
 	"unsafe"
 )
 
-// Calculates the change in user Elo resulting from the given stats.
-// Elo gains are based on the distribution table below, where columns correspond
-// to the number of guesses for each category.
+// CalculateElo calculates the change in user Elo resulting from the given
+// stats. Elo gains are based on the distribution table below, where columns
+// correspond to the number of guesses for each category.
 //
 //	|         |  1 |  2 |  3 |  4 |  5 |
 //	| ------- | -: | -: | -: | -: | -: |
@@ -79,6 +79,9 @@ func CalculateElo(l *LoldleStats) int {
 	return elo
 }
 
+// DailyStats contains a summary of a single game of LoLdle (see [LoldleStats]).
+// This additionally includes the ID of the user who posted the stats as well as
+// the change in Elo resulting from the stats.
 type DailyStats struct {
 	UserID string `db:"id"`
 
@@ -93,6 +96,7 @@ type DailyStats struct {
 	EloChange int `db:"elo_change"`
 }
 
+// NewDailyStats creates [DailyStats] for the given user with the given stats.
 func NewDailyStats(uID string, l *LoldleStats) *DailyStats {
 	return &DailyStats{
 		UserID: uID,
@@ -166,6 +170,9 @@ func (s *DailyStats) Scan() []any {
 	}
 }
 
+// TotalStats contains a summary of a user's cumulative LoLdle stats over all
+// played games (see [LoldleStats]). This additionally includes the user's ID as
+// well as their current Elo rating.
 type TotalStats struct {
 	UserID string `db:"id"`
 
@@ -181,6 +188,7 @@ type TotalStats struct {
 	Elo        int `db:"elo"`
 }
 
+// NewTotalStats creates [TotalStats] for the given user.
 func NewTotalStats(uID string) *TotalStats {
 	return &TotalStats{UserID: uID, Elo: 1000}
 }
@@ -231,6 +239,9 @@ func (s *TotalStats) Scan() []any {
 	}
 }
 
+// Update modifies the contained stats with the results from a game (an instance
+// of [DailyStats]). This also modifies the recorded number of days played as
+// well as the stored Elo rating.
 func (s *TotalStats) Update(d *DailyStats) {
 	s.DaysPlayed += 1
 	s.Elo += d.EloChange
