@@ -38,12 +38,13 @@ func RecordStats(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 func updateStats(daily *DailyStats) error {
 	log.Info("Updating daily stats", "uID", daily.UserID, "stats", daily)
 
-	err := dal.DB.Transactional(func(tx Tx) error {
+	err := dal.DB.Transaction(func(tx Tx) error {
 		txToday := dal.Today.WithTx(tx)
-		if err := txToday.Update(daily.UserID, daily); err != nil {
-			log.Warn("Update failed", "uID", daily.UserID, "err", err)
+		if err := txToday.Create(daily.UserID, daily); err != nil {
 			return err
 		}
+
+		log.Info("Fetching total stats", "uID", daily.UserID)
 
 		txTotal := dal.Total.WithTx(tx)
 		total, err := txTotal.Get(daily.UserID)
@@ -51,18 +52,16 @@ func updateStats(daily *DailyStats) error {
 			if errors.Is(err, sql.ErrNoRows) {
 				total = NewTotalStats(daily.UserID)
 			} else {
-				log.Error("Failed to fetch", "table", "total", "err", err)
 				return err
 			}
 		}
 
+		log.Info("Updating total stats", "uID", daily.UserID, "stats", total)
+
 		// Total stats can safely be updated here, since any violations (e.g. from
 		// multiple submissions) are caught during the first update.
 		total.Update(daily)
-
-		log.Info("Updating total stats", "uID", daily.UserID, "stats", total)
 		if err := txTotal.Update(daily.UserID, total); err != nil {
-			log.Warn("Update failed", "uID", total.UserID, "err", err)
 			return err
 		}
 

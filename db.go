@@ -88,7 +88,7 @@ func (db *DB) Init() error {
 	return nil
 }
 
-func (db *DB) Transactional(fn func(tx Tx) error) error {
+func (db *DB) Transaction(fn func(tx Tx) error) error {
 	log.Debug("Transaction start", "fn", fn)
 
 	tx, err := db.Conn.Begin()
