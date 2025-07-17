@@ -126,7 +126,7 @@ func (s *Session) MsgReact(chID string, msgID string, reaction string) error {
 }
 
 func (s *Session) CommandAdd(cmd Command) error {
-	if _, ok := s.Handlers[cmd.Definition.Name]; ok {
+	if _, ok := s.Commands[cmd.Definition.Name]; ok {
 		return fmt.Errorf("command with name `%s` already exists", cmd.Definition.Name)
 	}
 
@@ -134,7 +134,7 @@ func (s *Session) CommandAdd(cmd Command) error {
 		return fmt.Errorf("command creation `%s` failed: %v", cmd.Definition.Name, err)
 	}
 
-	log.Debug("Command registered", "name", cmd.Definition.Name)
+	log.Info("Command registered", "name", cmd.Definition.Name)
 	s.Commands[cmd.Definition.Name] = cmd.Handler
 	return nil
 }
@@ -156,7 +156,7 @@ func (s *Session) HandlerAdd(name string, handler any) error {
 		return nil
 	}).Interface()
 
-	log.Debug("Handler registered", "name", name)
+	log.Info("Handler registered", "name", name)
 	s.Handlers[name] = s.dcs.AddHandler(fn)
 	return nil
 }
