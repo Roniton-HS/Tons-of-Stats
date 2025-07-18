@@ -2,12 +2,16 @@ package main
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/log"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+//go:embed schema.sql
+var schema string
 
 // Tx represents a transaction used to access a database.
 //
@@ -53,49 +57,13 @@ func (db *DB) Close() {
 
 // init configures and bootstraps the underlying database.
 func (db *DB) init() error {
-	log.Info("Initializing database")
-	var stmt string
-
-	// Bootstrap table for daily stats
-	stmt = `
-	create table
-		if not exists
-		today (
-			id            string not null primary key,
-			classic       int,
-			quote         int,
-			ability       int,
-			ability_check bool,
-			emoji         int,
-			splash        int,
-			splash_check  bool,
-			elo_change    int
-		);
-	`
-	if _, err := db.Conn.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
-		return err
-	}
-
-	// Bootstrap table for cumulative stats
-	stmt = `
-	create table
-		if not exists
-		total (
-			id            string not null primary key,
-			classic       int,
-			quote         int,
-			ability       int,
-			ability_check int,
-			emoji         int,
-			splash        int,
-			splash_check  int,
-			days_played   int,
-			elo           int
-		);
-	`
-	if _, err := db.Conn.Exec(stmt); err != nil {
-		log.Error("Failed to execute statement", "stmt", strings.ReplaceAll(stmt, "\t", "  "), "err", err)
+	log.Info("Executing database schema")
+	if _, err := db.Conn.Exec(schema); err != nil {
+		log.Error(
+			"Failed to execute database schema",
+			"stmt", strings.ReplaceAll(schema, "\t", "  "),
+			"err", err,
+		)
 		return err
 	}
 
