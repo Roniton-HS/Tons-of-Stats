@@ -52,7 +52,8 @@ func updateStats(daily *DailyStats) error {
 	log.Info("Updating daily stats", "uID", daily.UserID, "stats", daily)
 
 	err := dal.DB.Transaction(func(tx Tx) error {
-		// Update daily stats if possible.
+		// Update daily stats if possible. Primary key conflicts indicate duplicate
+		// submissions within the same day.
 		txToday := dal.Today.WithTx(tx)
 		if err := txToday.Create(daily.UserID, daily); err != nil {
 			return err
