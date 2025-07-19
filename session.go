@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -55,14 +56,19 @@ func (s *Session) Open(cmds []Command) error {
 		}
 	})
 
-	// Unregister old commands.
-	regCmds, err := s.dcs.ApplicationCommands(s.AppID, s.ServerID)
+	// Unregister left-over commands. Application commands are registered on the
+	// server itself. Deprecations or changes to command names leave behind
+	// "ghost"-commands that don't work and simply produce an error.
+	appCmds, err := s.dcs.ApplicationCommands(s.AppID, s.ServerID)
 	if err != nil {
 		return err
 	}
 
-	// PERF: only remove commands not in `cmds`
-	for _, c := range regCmds {
+	for _, c := range appCmds {
+		if slices.ContainsFunc(cmds, func(c2 Command) bool { return c.Name == c2.Definition.Name }) {
+			continue
+		}
+
 		log.Debug("Unregistering left-over command", "id", c.ID, "name", c.Name)
 		s.dcs.ApplicationCommandDelete(s.AppID, s.ServerID, c.ID)
 	}
