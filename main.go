@@ -54,6 +54,7 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 // The job is responsible for printing daily stats for all users, the current
 // global leaderboard standings, as well as resetting the recorded daily stats.
 func dailyReset() {
+	log.Info("Performing daily reset")
 	chID, err := session.GetChannelID(env.StatsCh)
 	if err != nil {
 		log.Warn("Invalid channel", "name", env.StatsCh)
@@ -76,11 +77,11 @@ func dailyReset() {
 	// TODO: leaderboard update
 
 	// Delete all entries from the daily stats table. This is necessary, since we
-	// use primary key conflicts on the database side instead of a separate data
-	// structure to detect repeat submissions within the same day.
-	log.Info("Clearing daily stats")
+	// use primary key conflicts in the database layer to detect repeat
+	// submissions within the same day. Using a separate data structure does not
+	// offer persistance across application restarts.
 	if err := dal.Today.DeleteAll(); err != nil {
-		log.Error("Failed to delete from table", "table", "today", "err", err)
+		log.Error("Failed to clear daily stats", "table", dal.Today.Tbl, "err", err)
 	}
 }
 

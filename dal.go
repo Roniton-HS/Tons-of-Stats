@@ -9,19 +9,10 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// Scanner is used to scan database values into struct fields.
-//
-// The interface MUST be implemented with pointer receivers in order to modify
-// the underlying struct value.
-type Scanner interface {
-	// Scan returns a slice of struct fields to scan database values into.
-	Scan() []any
-}
-
 type DAL struct {
 	DB    *DB
-	Today Repository[*DailyStats]
-	Total Repository[*TotalStats]
+	Today *Repository[*DailyStats]
+	Total *Repository[*TotalStats]
 }
 
 // NewDAL returns a new DAL, initializing all repositories (see [Repository])
@@ -29,29 +20,37 @@ type DAL struct {
 func NewDAL(db *DB) *DAL {
 	return &DAL{
 		db,
-		makeRepository[*DailyStats](db.Conn, "today"),
-		makeRepository[*TotalStats](db.Conn, "total"),
+		NewRepository[*DailyStats](db.Conn, "today"),
+		NewRepository[*TotalStats](db.Conn, "total"),
 	}
 }
 
 // Repository is a connection to a specific database table.
 //
-// Database tables are assumed to contain an "id"-column, which will be used for
-// querying, updating, and deleting entries.
+// Database tables contain an "id"-column, which is used as the tables primary
+// key for CRUD operations.
 //
 // The contained type T must implement scanner for storing and retrieving values
 // from the underlying database. Stored fields MUST have a "db" struct-tag,
 // which is used as the database column to read from / write to. All tagged
 // values should be returned by t.Scan().
-type Repository[T Scanner] struct {
+type Repository[T any] struct {
 	// Database connection used for requests.
 	conn Tx
 
 	// Name of the database table this repository interacts with.
 	Tbl string
 
-	// List of database column names for T inserted into SELECT-expressions.
-	columns string
+	// Name of all of T's database columns; calculaed based on T's "db"
+	// struct-tags. Names need to be stored to allow generic construction of
+	// SELECT- and SET-clauses. Updates (see [Repository.Update]) would otherwise
+	// have to rely on hacky, transactional GET- and INSERT-OR-REPLACE operations.
+	columns []string
+
+	// Maps database column names (defined through struct-tags) to T's field
+	// names. Used to allow dynamic and ordered scanning of database columns into
+	// intances of T.
+	fields map[string]string
 
 	// Parametrized string inserted into VALUES-expressions with the appropriate
 	// number of parameters. The number of struct fields for a given Repository is
@@ -60,31 +59,33 @@ type Repository[T Scanner] struct {
 }
 
 // makeRepository creates a new repository for T.
-func makeRepository[T Scanner](conn Tx, tbl string) Repository[T] {
-	// Determine database columns from struct tags
+func NewRepository[T any](conn Tx, tbl string) *Repository[T] {
+	// Determine database columns and field mappings from struct tags.
 	rt := reflect.TypeFor[T]().Elem()
-	col := make([]string, 0, rt.NumField())
+	columns := make([]string, 0, rt.NumField())
+	fields := make(map[string]string, rt.NumField())
 
 	for i := range rt.NumField() {
 		f := rt.Field(i)
 		v, ok := f.Tag.Lookup("db")
 		if ok {
-			col = append(col, v)
+			columns = append(columns, v)
+			fields[v] = f.Name
 		}
 	}
 
 	// Create parametrized column string for VALUES-expressions.
-	b := bytes.Repeat([]byte{'?', ','}, len(col))
+	b := bytes.Repeat([]byte{'?', ','}, len(columns))
 	val := ""
 	if len(b) != 0 {
 		val = string(b[:len(b)-1])
 	}
 
-	return Repository[T]{conn, tbl, strings.Join(col, ","), val}
+	return &Repository[T]{conn, tbl, columns, fields, val}
 }
 
-// Instantiate concrete value for T. Direct instantiation is not possible in
-// cases where T is a pointer type.
+// getT instantiate concrete value for T. Direct instantiation is not possible
+// in cases where T is a pointer type.
 func (r *Repository[T]) getT() T {
 	var t T
 
@@ -96,22 +97,39 @@ func (r *Repository[T]) getT() T {
 	return t
 }
 
+// scanT returns a slice of pointers to all of t's struct fields with a "db"
+// struct-tag. The resulting slice is used to perform database I/O.
+func (r *Repository[T]) scanT(t T) []any {
+	s := make([]any, 0, len(r.columns))
+
+	rv := reflect.ValueOf(t)
+	if rv.Kind() == reflect.Pointer {
+		rv = rv.Elem()
+	}
+
+	for _, c := range r.columns {
+		s = append(s, rv.FieldByName(r.fields[c]).Addr().Interface())
+	}
+
+	return s
+}
+
 // WithTx creates a new [Repository], replacing the underlying connection with
 // tx. This allows temporarily reusing r in a transactional context, where the
 // transaction itself must be used to make requests.
 func (r *Repository[T]) WithTx(tx Tx) *Repository[T] {
-	return &Repository[T]{tx, r.Tbl, r.columns, r.values}
+	return &Repository[T]{tx, r.Tbl, r.columns, r.fields, r.values}
 }
 
 // Get fetches and returns the database entry with the given ID.
 func (r *Repository[T]) Get(id string) (T, error) {
 	log.Info("Getting entity", "tbl", r.Tbl, "id", id)
-	stmt := fmt.Sprintf("select (%s) from %s where id = ?", r.columns, r.Tbl)
+	stmt := fmt.Sprintf("select %s from %s where id = ?", strings.Join(r.columns, ","), r.Tbl)
 
 	t := r.getT()
 
 	row := r.conn.QueryRow(stmt, id)
-	if err := row.Scan(t.Scan()...); err != nil {
+	if err := row.Scan(r.scanT(t)...); err != nil {
 		log.Error("Get failed", "tbl", r.Tbl, "id", id, "stmt", stmt, "err", err)
 		return t, err
 	}
@@ -123,7 +141,7 @@ func (r *Repository[T]) Get(id string) (T, error) {
 // GetAll fetches all entries from the underlying database table.
 func (r *Repository[T]) GetAll() ([]T, error) {
 	log.Info("Getting all entities", "tbl", r.Tbl)
-	stmt := fmt.Sprintf("select (%s) from %s", r.columns, r.Tbl)
+	stmt := fmt.Sprintf("select %s from %s", strings.Join(r.columns, ","), r.Tbl)
 
 	rows, err := r.conn.Query(stmt)
 	if err != nil {
@@ -136,7 +154,7 @@ func (r *Repository[T]) GetAll() ([]T, error) {
 	for rows.Next() {
 		t := r.getT()
 
-		if err := rows.Scan(t.Scan()...); err != nil {
+		if err := rows.Scan(r.scanT(t)...); err != nil {
 			log.Error("Get all scan failed", "tbl", r.Tbl, "stmt", stmt, "err", err)
 			return nil, err
 		}
@@ -153,7 +171,7 @@ func (r *Repository[T]) Create(id string, t T) error {
 	log.Info("Creating entity", "tbl", r.Tbl, "id", id, "entity", t)
 	stmt := fmt.Sprintf("insert into %s values (%s)", r.Tbl, r.values)
 
-	if _, err := r.conn.Exec(stmt, t.Scan()...); err != nil {
+	if _, err := r.conn.Exec(stmt, r.scanT(t)...); err != nil {
 		log.Error("Create failed", "tbl", r.Tbl, "id", id, "entity", t, "stmt", stmt, "err", err)
 		return err
 	}
@@ -166,9 +184,9 @@ func (r *Repository[T]) Create(id string, t T) error {
 // such entry exists.
 func (r *Repository[T]) Update(id string, t T) error {
 	log.Info("Updating entity", "tbl", r.Tbl, "id", id, "entity", t)
-	stmt := fmt.Sprintf("update %s set (%s) = (%s) where id = ?", r.Tbl, r.columns, r.values)
+	stmt := fmt.Sprintf("update %s set (%s) = (%s) where id = ?", r.Tbl, strings.Join(r.columns, ","), r.values)
 
-	res, err := r.conn.Exec(stmt, append(t.Scan(), id)...)
+	res, err := r.conn.Exec(stmt, append(r.scanT(t), id)...)
 	if err != nil {
 		log.Error("Update failed", "tbl", r.Tbl, "id", id, "entity", t, "stmt", stmt, "err", err)
 		return err

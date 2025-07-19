@@ -52,7 +52,8 @@ func updateStats(daily *DailyStats) error {
 	log.Info("Updating daily stats", "uID", daily.UserID, "stats", daily)
 
 	err := dal.DB.Transaction(func(tx Tx) error {
-		// Update daily stats if possible.
+		// Update daily stats if possible. Primary key conflicts indicate duplicate
+		// submissions within the same day.
 		txToday := dal.Today.WithTx(tx)
 		if err := txToday.Create(daily.UserID, daily); err != nil {
 			return err
@@ -66,7 +67,12 @@ func updateStats(daily *DailyStats) error {
 		total, err := txTotal.Get(daily.UserID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				log.Info("No stats found - creating total stats", "uID", daily.UserID)
 				total = NewTotalStats(daily.UserID)
+
+				if err := txTotal.Create(total.UserID, total); err != nil {
+					return err
+				}
 			} else {
 				return err
 			}
