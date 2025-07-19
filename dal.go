@@ -11,8 +11,8 @@ import (
 
 type DAL struct {
 	DB    *DB
-	Today Repository[*DailyStats]
-	Total Repository[*TotalStats]
+	Today *Repository[*DailyStats]
+	Total *Repository[*TotalStats]
 }
 
 // NewDAL returns a new DAL, initializing all repositories (see [Repository])
@@ -20,8 +20,8 @@ type DAL struct {
 func NewDAL(db *DB) *DAL {
 	return &DAL{
 		db,
-		makeRepository[*DailyStats](db.Conn, "today"),
-		makeRepository[*TotalStats](db.Conn, "total"),
+		NewRepository[*DailyStats](db.Conn, "today"),
+		NewRepository[*TotalStats](db.Conn, "total"),
 	}
 }
 
@@ -59,7 +59,7 @@ type Repository[T any] struct {
 }
 
 // makeRepository creates a new repository for T.
-func makeRepository[T any](conn Tx, tbl string) Repository[T] {
+func NewRepository[T any](conn Tx, tbl string) *Repository[T] {
 	// Determine database columns and field mappings from struct tags.
 	rt := reflect.TypeFor[T]().Elem()
 	columns := make([]string, 0, rt.NumField())
@@ -81,7 +81,7 @@ func makeRepository[T any](conn Tx, tbl string) Repository[T] {
 		val = string(b[:len(b)-1])
 	}
 
-	return Repository[T]{conn, tbl, columns, fields, val}
+	return &Repository[T]{conn, tbl, columns, fields, val}
 }
 
 // getT instantiate concrete value for T. Direct instantiation is not possible
