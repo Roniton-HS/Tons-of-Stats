@@ -156,20 +156,6 @@ EloChange  %s%d
 	)
 }
 
-func (s *DailyStats) Scan() []any {
-	return []any{
-		&s.UserID,
-		&s.Classic,
-		&s.Quote,
-		&s.Ability,
-		&s.AbilityCheck,
-		&s.Emoji,
-		&s.Splash,
-		&s.SplashCheck,
-		&s.EloChange,
-	}
-}
-
 // TotalStats contains a summary of a user's cumulative LoLdle stats over all
 // played games (see [LoldleStats]). This additionally includes the user's ID as
 // well as their current Elo rating.
@@ -199,6 +185,11 @@ func (s *TotalStats) String() string {
 		return "Something went wrong :\\"
 	}
 
+	days := s.DaysPlayed
+	if days == 0 {
+		days = 1
+	}
+
 	return fmt.Sprintf(
 		`%s
 %s
@@ -212,31 +203,16 @@ Elo        %d
 `,
 		fmt.Sprintf("\x1b\n%s", name),
 		strings.Repeat("─", utf8.RuneCountInString(name)),
-		float32(s.Classic/s.DaysPlayed),
-		float32(s.Quote/s.DaysPlayed),
-		float32(s.Ability/s.DaysPlayed),
-		float32(s.AbilityCheck/s.DaysPlayed),
-		float32(s.Emoji/s.DaysPlayed),
-		float32(s.Splash/s.DaysPlayed),
-		float32(s.SplashCheck/s.DaysPlayed),
+		float32(s.Classic/days),
+		float32(s.Quote/days),
+		float32(s.Ability/days),
+		float32(s.AbilityCheck/days),
+		float32(s.Emoji/days),
+		float32(s.Splash/days),
+		float32(s.SplashCheck/days),
 		s.DaysPlayed,
 		s.Elo,
 	)
-}
-
-func (s *TotalStats) Scan() []any {
-	return []any{
-		&s.UserID,
-		&s.Classic,
-		&s.Quote,
-		&s.Ability,
-		&s.AbilityCheck,
-		&s.Emoji,
-		&s.Splash,
-		&s.SplashCheck,
-		&s.DaysPlayed,
-		&s.Elo,
-	}
 }
 
 // Update modifies the contained stats with the results from a game (an instance
