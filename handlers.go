@@ -67,7 +67,12 @@ func updateStats(daily *DailyStats) error {
 		total, err := txTotal.Get(daily.UserID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				log.Info("No stats found - creating total stats", "uID", daily.UserID)
 				total = NewTotalStats(daily.UserID)
+
+				if err := txTotal.Create(total.UserID, total); err != nil {
+					return err
+				}
 			} else {
 				return err
 			}
