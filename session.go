@@ -10,6 +10,11 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// Message flag for sending V2 components. Not yet available in discordgo.
+//
+// https://discord.com/developers/docs/components/reference#component-reference
+const IS_COMPONENTS_V2 = 1 << 15
+
 // Session is a connection to a [*discordgo.Session] with additional metadata as
 // well as all registered event handlers (see [discordgo.EventHandler])
 // slash-commands (see [discordgo.ApplicationCommand]).
@@ -136,6 +141,12 @@ func (s *Session) GetChannelID(name string) (string, error) {
 	return "", fmt.Errorf("invalid channel name `%s`", name)
 }
 
+// MsgList returns as many messages as can be found from the channel with the
+// given ID.
+func (s *Session) MsgList(chID string) ([]*discordgo.Message, error) {
+	return s.dcs.ChannelMessages(chID, 100, "", "", "")
+}
+
 // MsgSend sends a message with contents content to the channel with ID chID.
 func (s *Session) MsgSend(chID string, content string) error {
 	if _, err := s.dcs.ChannelMessageSend(chID, content); err != nil {
@@ -144,6 +155,42 @@ func (s *Session) MsgSend(chID string, content string) error {
 	}
 
 	log.Info("Message sent", "chID", chID, "content", content)
+	return nil
+}
+
+// MsgSendComplex sends a Components V2 message to the given channel (see
+// [IS_COMPONENTS_V2]).
+func (s *Session) MsgSendComplex(chID string, cmp []discordgo.MessageComponent) error {
+	send := discordgo.MessageSend{
+		Flags:      IS_COMPONENTS_V2,
+		Components: cmp,
+	}
+
+	if _, err := s.dcs.ChannelMessageSendComplex(chID, &send); err != nil {
+		log.Warn("Failed to send message", "chID", chID, "msg", send, "err", err)
+		return err
+	}
+
+	log.Info("Message sent", "chID", chID, "msg", send)
+	return nil
+}
+
+// MsgEditComplex edits the Components V2 message with the given ID in the given
+// channel (see [IS_COMPONENTS_V2]).
+func (s *Session) MsgEditComplex(chID string, msgID string, cmp []discordgo.MessageComponent) error {
+	edit := discordgo.MessageEdit{
+		Channel:    chID,
+		ID:         msgID,
+		Flags:      IS_COMPONENTS_V2,
+		Components: &cmp,
+	}
+
+	if _, err := s.dcs.ChannelMessageEditComplex(&edit); err != nil {
+		log.Warn("Failed to edit message", "chID", chID, "msgID", msgID, "msg", edit, "err", err)
+		return err
+	}
+
+	log.Info("Message edited", "chID", chID, "msgID", msgID, "msg", edit)
 	return nil
 }
 
