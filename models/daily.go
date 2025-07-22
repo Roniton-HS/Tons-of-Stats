@@ -39,27 +39,30 @@ func NewDailyStats(uID string, l *LoldleStats) *DailyStats {
 }
 
 func (s *DailyStats) String() string {
-	aChk, sChk := "", ""
+	crs := "\x1b[1;31m✗\x1b[0m"
+	chk := "\x1b[1;32m✓\x1b[0m"
+
+	aChk, sChk := crs, crs
 	if s.AbilityCheck {
-		aChk = "✔"
+		aChk = chk
 	}
 	if s.SplashCheck {
-		sChk = "✔"
+		sChk = chk
 	}
 
-	elo := "+"
+	elo := "\x1b[1;32m+"
 	if s.EloChange < 0 {
-		elo = "-"
+		elo = "\x1b[1;31m-"
 	}
 
 	return fmt.Sprintf(
 		`
-Classic    %d
-Quote      %d
-Ability    %d %s
-Emoji      %d
-Splash     %d %s
-EloChange  %s%d
+Classic  %2d
+Quote    %2d
+Ability  %2d %s
+Emoji    %2d
+Splash   %2d %s
+Elo     %s%2d%s
 `,
 		s.Classic,
 		s.Quote,
@@ -70,5 +73,6 @@ EloChange  %s%d
 		sChk,
 		elo,
 		s.EloChange,
+		"\x1b[0m",
 	)
 }

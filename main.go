@@ -5,9 +5,13 @@ import (
 	"tons-of-stats/db"
 	sess "tons-of-stats/session"
 
+	_ "github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
+
+// Color used for [discordgo.Container] accents.
+var ACCENT = int(0xd6aa38)
 
 var dal *DAL
 var env *Env

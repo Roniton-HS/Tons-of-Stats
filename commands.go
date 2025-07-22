@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
-
+	"fmt"
 	sess "tons-of-stats/session"
 
 	"github.com/bwmarrin/discordgo"
@@ -27,18 +27,34 @@ var cmds = []sess.Command{
 			// Fetch current daily stats for the member invoking the command.
 			if stats, err := dal.Today.Get(i.Member.User.ID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					msg = "No stats recorded today."
+					msg = "❌  **No stats recorded.**"
 				} else {
 					log.Warn("Stat retrieval failed", "chID", i.ChannelID, "uID", i.Member.User.ID, "err", err)
-					msg = "Could not retrieve your stats."
+					msg = fmt.Sprintf(
+						"❌  **%s**\n-# %s",
+						"Could not retrieve your stats. Please try again.",
+						"If this error persists, please contact the moderation team.",
+					)
 				}
 			} else {
-				msg = stats.String()
+				msg = fmt.Sprintf("## %s\n```ansi\n%s\n```", "Daily stats:", stats.String())
 			}
 
 			return &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: msg},
+				Data: &discordgo.InteractionResponseData{
+					Flags: sess.IS_COMPONENTS_V2 ^ discordgo.MessageFlagsEphemeral,
+					Components: []discordgo.MessageComponent{
+						discordgo.Container{
+							AccentColor: &ACCENT,
+							Components: []discordgo.MessageComponent{
+								discordgo.TextDisplay{
+									Content: msg,
+								},
+							},
+						},
+					},
+				},
 			}
 		},
 	},
