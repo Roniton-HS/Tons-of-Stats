@@ -57,7 +57,9 @@ func (s *Session) Open(cmds []Command) error {
 	s.HandlerAdd("handle-command", func(dcs *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := s.Commands[i.ApplicationCommandData().Name]; ok {
 			log.Info("Executing command", "name", i.ApplicationCommandData().Name)
-			s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction))
+			if err := s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction)); err != nil {
+				log.Error("Execution failed", "name", i.ApplicationCommandData().Name, "err", err)
+			}
 		}
 	})
 
