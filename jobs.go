@@ -56,7 +56,7 @@ func dailyReset() {
 	// Get all stats recorded today and create messages for each.
 	entries, err := dal.Today.GetAll()
 	if err != nil {
-		log.Error("Failed to fetch", "table", "today", "err", err)
+		log.Error("Failed to fetch", "tbl", dal.Today.Tbl, "err", err)
 	}
 
 	if len(entries) > 0 {
@@ -66,13 +66,15 @@ func dailyReset() {
 		session.MsgSend(chID, entry.String())
 	}
 
-	// TODO: leaderboard update
-
 	// Delete all entries from the daily stats table. This is necessary, since we
 	// use primary key conflicts in the database layer to detect repeat
 	// submissions within the same day. Using a separate data structure does not
 	// offer persistance across application restarts.
 	if err := dal.Today.DeleteAll(); err != nil {
 		log.Error("Failed to clear daily stats", "table", dal.Today.Tbl, "err", err)
+	}
+
+	if err := updateLeaderboard(); err != nil {
+		log.Warn("Failed to update leaderboard", "err", err)
 	}
 }
