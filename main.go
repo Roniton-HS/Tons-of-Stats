@@ -16,6 +16,7 @@ var ACCENT = int(0xd6aa38)
 var dal *DAL
 var env *Env
 var session *sess.Session
+var leaderboard *Leaderboard
 
 func main() {
 	log.SetDefault(
@@ -54,7 +55,13 @@ func main() {
 
 	session.HandlerAdd("record-stats", RecordStats)
 
-	// Automated message scheduling
+	// Stat display and scheduling
+	l, err := NewLeaderboard(dal, env, session)
+	if err != nil {
+		log.Fatal("Failed to initialize leaderboard", "err", err)
+	}
+	leaderboard = l
+
 	now := time.Now()
 	midnight := time.Date(
 		now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location(),

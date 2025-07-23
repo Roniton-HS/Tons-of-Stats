@@ -24,7 +24,7 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 	log.Info("Running job", "job", job)
 	go func() {
 		job()
-		log.Info("Job complete", "job", job)
+		log.Debug("Job complete", "job", job)
 	}()
 
 	if interval == 0 {
@@ -38,7 +38,7 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 		log.Info("Running job", "job", job)
 		go func() {
 			job()
-			log.Info("Job complete", "job", job)
+			log.Debug("Job complete", "job", job)
 		}()
 	}
 }
@@ -74,7 +74,5 @@ func dailyReset() {
 		log.Error("Failed to clear daily stats", "table", dal.Today.Tbl, "err", err)
 	}
 
-	if err := updateLeaderboard(); err != nil {
-		log.Warn("Failed to update leaderboard", "err", err)
-	}
+	leaderboard.Update()
 }

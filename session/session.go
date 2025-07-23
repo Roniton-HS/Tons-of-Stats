@@ -150,36 +150,38 @@ func (s *Session) MsgList(chID string) ([]*discordgo.Message, error) {
 }
 
 // MsgSend sends a message with contents content to the channel with ID chID.
-func (s *Session) MsgSend(chID string, content string) error {
-	if _, err := s.dcs.ChannelMessageSend(chID, content); err != nil {
+func (s *Session) MsgSend(chID string, content string) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageSend(chID, content)
+	if err != nil {
 		log.Warn("Failed to send message", "chID", chID, "err", err)
-		return err
+		return nil, err
 	}
 
 	log.Info("Message sent", "chID", chID, "content", content)
-	return nil
+	return m, nil
 }
 
 // MsgSendComplex sends a Components V2 message to the given channel (see
 // [IS_COMPONENTS_V2]).
-func (s *Session) MsgSendComplex(chID string, cmp []discordgo.MessageComponent) error {
+func (s *Session) MsgSendComplex(chID string, cmp []discordgo.MessageComponent) (*discordgo.Message, error) {
 	send := discordgo.MessageSend{
 		Flags:      IS_COMPONENTS_V2,
 		Components: cmp,
 	}
 
-	if _, err := s.dcs.ChannelMessageSendComplex(chID, &send); err != nil {
+	m, err := s.dcs.ChannelMessageSendComplex(chID, &send)
+	if err != nil {
 		log.Warn("Failed to send message", "chID", chID, "msg", send, "err", err)
-		return err
+		return nil, err
 	}
 
 	log.Info("Message sent", "chID", chID, "msg", send)
-	return nil
+	return m, nil
 }
 
 // MsgEditComplex edits the Components V2 message with the given ID in the given
 // channel (see [IS_COMPONENTS_V2]).
-func (s *Session) MsgEditComplex(chID string, msgID string, cmp []discordgo.MessageComponent) error {
+func (s *Session) MsgEditComplex(chID string, msgID string, cmp []discordgo.MessageComponent) (*discordgo.Message, error) {
 	edit := discordgo.MessageEdit{
 		Channel:    chID,
 		ID:         msgID,
@@ -187,13 +189,14 @@ func (s *Session) MsgEditComplex(chID string, msgID string, cmp []discordgo.Mess
 		Components: &cmp,
 	}
 
-	if _, err := s.dcs.ChannelMessageEditComplex(&edit); err != nil {
+	m, err := s.dcs.ChannelMessageEditComplex(&edit)
+	if err != nil {
 		log.Warn("Failed to edit message", "chID", chID, "msgID", msgID, "msg", edit, "err", err)
-		return err
+		return nil, err
 	}
 
 	log.Info("Message edited", "chID", chID, "msgID", msgID, "msg", edit)
-	return nil
+	return m, nil
 }
 
 // MsgReact adds a reaction to the given message, in the given channel.
