@@ -53,6 +53,10 @@ func NewLeaderboard(dal *DAL, env *Env, session *sess.Session) (*Leaderboard, er
 // reflect any potential changes.
 func (l *Leaderboard) Update() error {
 	log.Info("Updating leaderboard", "chID", l.chID, "msgID", l.msgID)
+	if err := l.validateMsg(); err != nil {
+		log.Warn("Update failed", "chID", l.chID, "msgID", l.msgID, "err", err)
+		return err
+	}
 
 	// PERF: prefetch + cache?
 	stats, err := l.dal.Total.GetAll()
@@ -78,6 +82,25 @@ func (l *Leaderboard) Update() error {
 	}
 
 	log.Debug("Update complete", "chID", l.chID, "msgID", l.msgID)
+	return nil
+}
+
+// validateMsg checks whether stored msgID still points to a valid message and
+// performs corrective measures if it doesn't. This is required in cases where
+// the original leaderboard message is deleted while the application is running.
+func (l *Leaderboard) validateMsg() error {
+	if _, err := session.MsgGet(l.chID, l.msgID); err == nil {
+		return nil
+	} else {
+		log.Warn("Invalid leaderboard message", "chID", l.chID, "msgID", l.msgID, "err", err)
+	}
+
+	msgID, err := createMsg(l.session, l.chID)
+	if err != nil {
+		return err
+	}
+
+	l.msgID = msgID
 	return nil
 }
 

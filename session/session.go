@@ -143,6 +143,11 @@ func (s *Session) GetChannelID(name string) (string, error) {
 	return "", fmt.Errorf("invalid channel name `%s`", name)
 }
 
+// MsgGet returns the message with the given ID from the given channel.
+func (s *Session) MsgGet(chID string, msgID string) (*discordgo.Message, error) {
+	return s.dcs.ChannelMessage(chID, msgID)
+}
+
 // MsgList returns as many messages as can be found from the channel with the
 // given ID.
 func (s *Session) MsgList(chID string) ([]*discordgo.Message, error) {
