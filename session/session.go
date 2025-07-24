@@ -166,15 +166,9 @@ func (s *Session) MsgSend(chID string, content string) (*discordgo.Message, erro
 	return m, nil
 }
 
-// MsgSendComplex sends a Components V2 message to the given channel (see
-// [IS_COMPONENTS_V2]).
-func (s *Session) MsgSendComplex(chID string, cmp []discordgo.MessageComponent) (*discordgo.Message, error) {
-	send := discordgo.MessageSend{
-		Flags:      IS_COMPONENTS_V2,
-		Components: cmp,
-	}
-
-	m, err := s.dcs.ChannelMessageSendComplex(chID, &send)
+// MsgSendComplex sends a message.
+func (s *Session) MsgSendComplex(chID string, send *discordgo.MessageSend) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageSendComplex(chID, send)
 	if err != nil {
 		log.Warn("Failed to send message", "chID", chID, "msg", send, "err", err)
 		return nil, err
@@ -184,23 +178,15 @@ func (s *Session) MsgSendComplex(chID string, cmp []discordgo.MessageComponent) 
 	return m, nil
 }
 
-// MsgEditComplex edits the Components V2 message with the given ID in the given
-// channel (see [IS_COMPONENTS_V2]).
-func (s *Session) MsgEditComplex(chID string, msgID string, cmp []discordgo.MessageComponent) (*discordgo.Message, error) {
-	edit := discordgo.MessageEdit{
-		Channel:    chID,
-		ID:         msgID,
-		Flags:      IS_COMPONENTS_V2,
-		Components: &cmp,
-	}
-
-	m, err := s.dcs.ChannelMessageEditComplex(&edit)
+// MsgEditComplex applies an edit to a message.
+func (s *Session) MsgEditComplex(edit *discordgo.MessageEdit) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageEditComplex(edit)
 	if err != nil {
-		log.Warn("Failed to edit message", "chID", chID, "msgID", msgID, "msg", edit, "err", err)
+		log.Warn("Failed to edit message", "chID", edit.Channel, "msgID", edit.ID, "msg", edit, "err", err)
 		return nil, err
 	}
 
-	log.Info("Message edited", "chID", chID, "msgID", msgID, "msg", edit)
+	log.Info("Message edited", "chID", edit.Channel, "msgID", edit.ID, "msg", edit)
 	return m, nil
 }
 
