@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"tons-of-stats/models"
 	sess "tons-of-stats/session"
 
@@ -13,6 +14,7 @@ import (
 )
 
 var ErrNoMsg = errors.New("leaderboard: no suitable message found")
+var lbHeader = "## Leaderboard"
 
 type Leaderboard struct {
 	dal     *DAL
@@ -58,24 +60,45 @@ func (l *Leaderboard) Update() error {
 		return err
 	}
 
-	// PERF: prefetch + cache?
+	// PERF: prefetch + cache
 	stats, err := l.dal.Total.GetAll()
 	if err != nil {
 		return err
 	}
 
-	cmp := []discordgo.MessageComponent{
-		discordgo.Container{
-			AccentColor: &ACCENT,
-			Components: []discordgo.MessageComponent{
-				discordgo.TextDisplay{
-					Content: fmt.Sprintf("## Rank Ladder\n\n%s", fmtStats(stats)),
+	rank, name, elo := fmtStats(stats)
+
+	// FIX: second embed + pagination with > 3 leaderboard entries
+	edit := &discordgo.MessageEdit{
+		Channel: l.chID,
+		ID:      l.msgID,
+		Content: &lbHeader,
+		Embeds: &[]*discordgo.MessageEmbed{
+			{
+				Title:       "Rank Ladder",
+				Description: fmt.Sprintf("-# Last Update: %s", time.Now().Format(time.DateOnly+" at "+time.Kitchen)),
+				Color:       0xd6aa38,
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:   "Rank",
+						Value:  strings.Join(rank, "\n"),
+						Inline: true,
+					},
+					{
+						Name:   "Name",
+						Value:  strings.Join(name, "\n"),
+						Inline: true,
+					},
+					{
+						Name:   "Elo",
+						Value:  strings.Join(elo, "\n"),
+						Inline: true,
+					},
 				},
 			},
 		},
 	}
-
-	_, err = l.session.MsgEditComplex(l.chID, l.msgID, cmp)
+	_, err = l.session.MsgEditComplex(edit)
 	if err != nil {
 		log.Warn("Update failed", "chID", l.chID, "msgID", l.msgID, "err", err)
 		return err
@@ -85,7 +108,7 @@ func (l *Leaderboard) Update() error {
 	return nil
 }
 
-// validateMsg checks whether stored msgID still points to a valid message and
+// validateMsg checks if the stored msgID still points to a valid message and
 // performs corrective measures if it doesn't. This is required in cases where
 // the original leaderboard message is deleted while the application is running.
 func (l *Leaderboard) validateMsg() error {
@@ -113,7 +136,7 @@ func findMsg(session *sess.Session, chID string) (msgID string, err error) {
 	}
 
 	for _, m := range msgs {
-		if m.Author.ID != session.AppID || m.Flags != sess.IS_COMPONENTS_V2 {
+		if m.Author.ID != session.AppID || m.Flags == sess.IS_COMPONENTS_V2 {
 			continue
 		}
 
@@ -128,7 +151,7 @@ func findMsg(session *sess.Session, chID string) (msgID string, err error) {
 func createMsg(session *sess.Session, chID string) (msgID string, err error) {
 	log.Info("Creating new leaderboard")
 
-	m, err := session.MsgSendComplex(chID, []discordgo.MessageComponent{})
+	m, err := session.MsgSendComplex(chID, &discordgo.MessageSend{})
 	if err != nil {
 		log.Error("Creation failed", "err", err)
 		return "", err
@@ -139,7 +162,7 @@ func createMsg(session *sess.Session, chID string) (msgID string, err error) {
 }
 
 // fmtStats orders and formats all user stats for display in the leaderboard.
-func fmtStats(stats []*models.TotalStats) string {
+func fmtStats(stats []*models.TotalStats) (rank []string, name []string, elo []string) {
 	// DB ordering
 	slices.SortFunc(stats, func(a *models.TotalStats, b *models.TotalStats) int {
 		if a.Elo < b.Elo {
@@ -151,34 +174,34 @@ func fmtStats(stats []*models.TotalStats) string {
 		return 0
 	})
 
-	var sb strings.Builder
+	rank = make([]string, 0, len(stats))
+	name = make([]string, 0, len(stats))
+	elo = make([]string, 0, len(stats))
+
 	for i, s := range stats {
-		sb.WriteString(fmtRank(i, s))
-	}
-
-	return sb.String()
-}
-
-// fmtRank formats a user's rank and stats for display in the leaderboard.
-func fmtRank(i int, s *models.TotalStats) string {
-	name, err := session.GetUserName(s.UserID)
-	if err != nil {
-		log.Warn("Failed to resolve name", "uID", s.UserID, "err", err)
-		name = "!?unknown"
-	}
-
-	var prefix = "\x1b[30m-"
-	var change = 0
-
-	// PERF: prefetch / DB correlation
-	if daily, err := dal.Today.Get(s.UserID); err == nil {
-		if daily.EloChange > 0 {
-			prefix = "\x1b[32m+"
-		} else if daily.EloChange < 0 {
-			prefix = "\x1b[31m-"
+		user, err := session.GetUserName(s.UserID)
+		if err != nil {
+			log.Warn("Failed to resolve name", "uID", s.UserID, "err", err)
+			user = "!?unknown"
 		}
-		change = daily.EloChange
+
+		var prefix = "\x1b[30m-"
+		var change = 0
+
+		// PERF: prefetch / DB correlation
+		if daily, err := dal.Today.Get(s.UserID); err == nil {
+			if daily.EloChange > 0 {
+				prefix = "\x1b[32m+"
+			} else if daily.EloChange < 0 {
+				prefix = "\x1b[31m-"
+			}
+			change = daily.EloChange
+		}
+
+		rank = append(rank, fmt.Sprintf("```%d```", i+1))
+		name = append(name, fmt.Sprintf("``` %s ```", user))
+		elo = append(elo, fmt.Sprintf("```ansi\n%4d [%s%d\x1b[0m]```", s.Elo, prefix, change))
 	}
 
-	return fmt.Sprintf("```ansi\n#%d %s \x1b[30m|\x1b[0m \x1b[1m%d\x1b[0m Elo [%s%d\x1b[0m]\n```", i+1, name, s.Elo, prefix, change)
+	return rank, name, elo
 }
