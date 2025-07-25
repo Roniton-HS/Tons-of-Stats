@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"fmt"
@@ -9,6 +9,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/charmbracelet/log"
 )
+
+// Message flag for sending V2 components. Not yet available in discordgo.
+//
+// https://discord.com/developers/docs/components/reference#component-reference
+const IS_COMPONENTS_V2 = 1 << 15
 
 // Session is a connection to a [*discordgo.Session] with additional metadata as
 // well as all registered event handlers (see [discordgo.EventHandler])
@@ -52,7 +57,9 @@ func (s *Session) Open(cmds []Command) error {
 	s.HandlerAdd("handle-command", func(dcs *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := s.Commands[i.ApplicationCommandData().Name]; ok {
 			log.Info("Executing command", "name", i.ApplicationCommandData().Name)
-			s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction))
+			if err := s.dcs.InteractionRespond(i.Interaction, h(dcs, i.Interaction)); err != nil {
+				log.Error("Execution failed", "name", i.ApplicationCommandData().Name, "err", err)
+			}
 		}
 	})
 
@@ -136,15 +143,51 @@ func (s *Session) GetChannelID(name string) (string, error) {
 	return "", fmt.Errorf("invalid channel name `%s`", name)
 }
 
+// MsgGet returns the message with the given ID from the given channel.
+func (s *Session) MsgGet(chID string, msgID string) (*discordgo.Message, error) {
+	return s.dcs.ChannelMessage(chID, msgID)
+}
+
+// MsgList returns as many messages as can be found from the channel with the
+// given ID.
+func (s *Session) MsgList(chID string) ([]*discordgo.Message, error) {
+	return s.dcs.ChannelMessages(chID, 100, "", "", "")
+}
+
 // MsgSend sends a message with contents content to the channel with ID chID.
-func (s *Session) MsgSend(chID string, content string) error {
-	if _, err := s.dcs.ChannelMessageSend(chID, content); err != nil {
+func (s *Session) MsgSend(chID string, content string) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageSend(chID, content)
+	if err != nil {
 		log.Warn("Failed to send message", "chID", chID, "err", err)
-		return err
+		return nil, err
 	}
 
 	log.Info("Message sent", "chID", chID, "content", content)
-	return nil
+	return m, nil
+}
+
+// MsgSendComplex sends a message.
+func (s *Session) MsgSendComplex(chID string, send *discordgo.MessageSend) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageSendComplex(chID, send)
+	if err != nil {
+		log.Warn("Failed to send message", "chID", chID, "msg", send, "err", err)
+		return nil, err
+	}
+
+	log.Info("Message sent", "chID", chID, "msg", send)
+	return m, nil
+}
+
+// MsgEditComplex applies an edit to a message.
+func (s *Session) MsgEditComplex(edit *discordgo.MessageEdit) (*discordgo.Message, error) {
+	m, err := s.dcs.ChannelMessageEditComplex(edit)
+	if err != nil {
+		log.Warn("Failed to edit message", "chID", edit.Channel, "msgID", edit.ID, "msg", edit, "err", err)
+		return nil, err
+	}
+
+	log.Info("Message edited", "chID", edit.Channel, "msgID", edit.ID, "msg", edit)
+	return m, nil
 }
 
 // MsgReact adds a reaction to the given message, in the given channel.

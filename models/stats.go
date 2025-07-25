@@ -1,4 +1,4 @@
-package main
+package models
 
 import (
 	"bytes"
@@ -10,25 +10,11 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-const LoldleHeader = "I've completed all the modes of #LoLdle today:"
-
-// Category represents the score for a single LoLdle category.
-type Category struct {
+// category represents the score for a single LoLdle category.
+type category struct {
 	Key     []byte // Category name
 	Value   []byte // Category score
 	Checked bool   // Whether the category has an additional success-check
-}
-
-// LoLdleStats contains a summary of a single game of LoLdle, including the
-// scores for all categories and information about bonuses (i.e. checkmarks).
-type LoldleStats struct {
-	Classic      int
-	Quote        int
-	Ability      int
-	AbilityCheck bool
-	Emoji        int
-	Splash       int
-	SplashCheck  bool
 }
 
 // CanParse reports whether the given message may be parsed into [LoldleStats].
@@ -65,7 +51,7 @@ func ParseStats(msg string) (*LoldleStats, error) {
 	lines := bytes.Split([]byte(msg), []byte("\n"))
 
 	// Parse message into categories before conversion
-	categories := make([]Category, 0, 5)
+	categories := make([]category, 0, 5)
 
 	// First line must be [LoldleHeader]. We assume no empty lines, such that the
 	// next five lines must be the category results.
@@ -83,7 +69,7 @@ func ParseStats(msg string) (*LoldleStats, error) {
 		key, value := f[1], f[2]
 		checked := len(f) > 3 && bytes.Equal(f[3], []byte("✓"))
 
-		categories = append(categories, Category{
+		categories = append(categories, category{
 			key[:len(key)-1], // Remove trailing `:`
 			value,
 			checked,
