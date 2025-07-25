@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Color used for [discordgo.Container] accents.
+// ACCENT denotes the color used for message accents.
 var ACCENT = int(0xd6aa38)
 
 var dal *DAL

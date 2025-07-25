@@ -15,6 +15,7 @@ import (
 
 var ErrNoMsg = errors.New("leaderboard: no suitable message found")
 var lbHeader = "## Leaderboard"
+var favicon = "https://loldle.net/favicon.ico"
 
 type Leaderboard struct {
 	dal     *DAL
@@ -66,40 +67,76 @@ func (l *Leaderboard) Update() error {
 		return err
 	}
 
-	rank, name, elo := fmtStats(stats)
+	var pRank, pName, pElo []string
+	var rank, name, elo []string
+	if len(stats) > 3 {
+		pRank, pName, pElo = fmtStats(stats[:3])
+		rank, name, elo = fmtStats(stats[3:])
+	} else {
+		pRank, pName, pElo = fmtStats(stats)
+	}
 
-	// FIX: second embed + pagination with > 3 leaderboard entries
-	edit := &discordgo.MessageEdit{
-		Channel: l.chID,
-		ID:      l.msgID,
-		Content: &lbHeader,
-		Embeds: &[]*discordgo.MessageEmbed{
-			{
-				Title:       "Rank Ladder",
-				Description: fmt.Sprintf("-# Last Update: %s", time.Now().Format(time.DateOnly+" at "+time.Kitchen)),
-				Color:       0xd6aa38,
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:   "Rank",
-						Value:  strings.Join(rank, "\n"),
-						Inline: true,
-					},
-					{
-						Name:   "Name",
-						Value:  strings.Join(name, "\n"),
-						Inline: true,
-					},
-					{
-						Name:   "Elo",
-						Value:  strings.Join(elo, "\n"),
-						Inline: true,
-					},
+	embeds := []*discordgo.MessageEmbed{
+		{
+			Title:       "Podium",
+			Description: fmt.Sprintf("-# Last Update: %s", time.Now().Format(time.DateOnly+" at "+time.Kitchen)),
+			Color:       ACCENT,
+			// FIX: image shows up for one frame, then disappears. Potentially
+			// relevant: discord/discord-api-docs/issues/6171.
+			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: favicon},
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:   "Rank",
+					Value:  strings.Join(pRank, "\n"),
+					Inline: true,
+				},
+				{
+					Name:   "Name",
+					Value:  strings.Join(pName, "\n"),
+					Inline: true,
+				},
+				{
+					Name:   "Elo",
+					Value:  strings.Join(pElo, "\n"),
+					Inline: true,
 				},
 			},
 		},
 	}
-	_, err = l.session.MsgEditComplex(edit)
-	if err != nil {
+
+	// TODO: pagination
+	if len(stats) > 3 {
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			Title: "Ranked Ladder",
+			Color: ACCENT,
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:   "Rank",
+					Value:  strings.Join(rank, "\n"),
+					Inline: true,
+				},
+				{
+					Name:   "Name",
+					Value:  strings.Join(name, "\n"),
+					Inline: true,
+				},
+				{
+					Name:   "Elo",
+					Value:  strings.Join(elo, "\n"),
+					Inline: true,
+				},
+			},
+		},
+		)
+	}
+
+	edit := &discordgo.MessageEdit{
+		Channel: l.chID,
+		ID:      l.msgID,
+		Content: &lbHeader,
+		Embeds:  &embeds,
+	}
+	if _, err := l.session.MsgEditComplex(edit); err != nil {
 		log.Warn("Update failed", "chID", l.chID, "msgID", l.msgID, "err", err)
 		return err
 	}
