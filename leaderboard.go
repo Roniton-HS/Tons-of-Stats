@@ -137,11 +137,10 @@ func findMsg(session *sess.Session, chID string) (msgID string, err error) {
 	}
 
 	for _, m := range msgs {
-		if m.Author.ID != session.AppID || m.Flags == sess.IS_COMPONENTS_V2 {
+		if m.Author.ID != session.AppID || m.Content != lbHeader {
 			continue
 		}
 
-		// TODO: check message header components?
 		return m.ID, nil
 	}
 
@@ -152,7 +151,7 @@ func findMsg(session *sess.Session, chID string) (msgID string, err error) {
 func createMsg(session *sess.Session, chID string) (msgID string, err error) {
 	log.Info("Creating new leaderboard")
 
-	m, err := session.MsgSendComplex(chID, &discordgo.MessageSend{})
+	m, err := session.MsgSendComplex(chID, &discordgo.MessageSend{Content: lbHeader})
 	if err != nil {
 		log.Error("Creation failed", "err", err)
 		return "", err
