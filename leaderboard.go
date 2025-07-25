@@ -55,7 +55,7 @@ func NewLeaderboard(dal *DAL, env *Env, session *sess.Session) (*Leaderboard, er
 // reflect any potential changes.
 func (l *Leaderboard) Update() error {
 	log.Info("Updating leaderboard", "chID", l.chID, "msgID", l.msgID)
-	if err := l.validateMsg(); err != nil {
+	if err := l.invalidateMsg(); err != nil {
 		log.Warn("Update failed", "chID", l.chID, "msgID", l.msgID, "err", err)
 		return err
 	}
@@ -108,10 +108,11 @@ func (l *Leaderboard) Update() error {
 	return nil
 }
 
-// validateMsg checks if the stored msgID still points to a valid message and
-// performs corrective measures if it doesn't. This is required in cases where
-// the original leaderboard message is deleted while the application is running.
-func (l *Leaderboard) validateMsg() error {
+// invalidateMsg ensures the message for the stored msgID still points to a
+// valid message and performs corrective measures in case it doesn't. This is
+// required in cases where the original leaderboard message is deleted while the
+// application is running.
+func (l *Leaderboard) invalidateMsg() error {
 	if _, err := session.MsgGet(l.chID, l.msgID); err == nil {
 		return nil
 	} else {
@@ -166,9 +167,9 @@ func fmtStats(stats []*models.TotalStats) (rank []string, name []string, elo []s
 	// DB ordering
 	slices.SortFunc(stats, func(a *models.TotalStats, b *models.TotalStats) int {
 		if a.Elo < b.Elo {
-			return -1
-		} else if a.Elo > b.Elo {
 			return 1
+		} else if a.Elo > b.Elo {
+			return -1
 		}
 
 		return 0
@@ -185,7 +186,7 @@ func fmtStats(stats []*models.TotalStats) (rank []string, name []string, elo []s
 			user = "!?unknown"
 		}
 
-		var prefix = "\x1b[30m-"
+		var prefix = "\x1b[30m+"
 		var change = 0
 
 		// PERF: prefetch / DB correlation
@@ -198,7 +199,7 @@ func fmtStats(stats []*models.TotalStats) (rank []string, name []string, elo []s
 			change = daily.EloChange
 		}
 
-		rank = append(rank, fmt.Sprintf("```%d```", i+1))
+		rank = append(rank, fmt.Sprintf("``` %d ```", i+1))
 		name = append(name, fmt.Sprintf("``` %s ```", user))
 		elo = append(elo, fmt.Sprintf("```ansi\n%4d [%s%d\x1b[0m]```", s.Elo, prefix, change))
 	}
