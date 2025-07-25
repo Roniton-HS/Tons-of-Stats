@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 	sess "tons-of-stats/session"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,21 +38,19 @@ var cmds = []sess.Command{
 					)
 				}
 			} else {
-				msg = fmt.Sprintf("## %s\n```ansi\n%s\n```", "Daily stats:", stats.String())
+				msg = fmt.Sprintf("```ansi\n%s\n```", stats.String())
 			}
 
 			return &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Flags: sess.IS_COMPONENTS_V2 ^ discordgo.MessageFlagsEphemeral,
-					Components: []discordgo.MessageComponent{
-						discordgo.Container{
-							AccentColor: &ACCENT,
-							Components: []discordgo.MessageComponent{
-								discordgo.TextDisplay{
-									Content: msg,
-								},
-							},
+					Flags: discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{
+						{
+							Title:       "Stats",
+							Description: fmt.Sprintf("-# Date: %s", time.Now().Format(time.DateOnly)),
+							Color:       ACCENT,
+							Fields:      []*discordgo.MessageEmbedField{{Value: msg}},
 						},
 					},
 				},
