@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"time"
 	"tons-of-stats/db"
 	sess "tons-of-stats/session"
@@ -36,6 +37,13 @@ func main() {
 	env = NewEnv()
 	if env.IsProd {
 		log.SetLevel(log.InfoLevel)
+
+		fh, err := os.Create("tons_of_stats.log")
+		if err != nil {
+			log.Fatal("Failed to open logfile.")
+		}
+
+		log.SetOutput(fh)
 	}
 
 	// Database configuration
@@ -68,6 +76,9 @@ func main() {
 	)
 	go schedule(midnight, 24*time.Hour, dailyReset)
 
+	if env.IsProd {
+		log.New(os.Stdout).Info("Running...")
+	}
 	log.Info("Running...")
 	select {}
 }

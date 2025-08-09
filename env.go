@@ -37,8 +37,6 @@ type Env struct {
 // Where possible, this function provides more-or-less (probably less) sensible
 // defaults.
 func NewEnv() *Env {
-	log.Info("Setting up environment")
-
 	env := &Env{
 		ResultsCh: "result-spam",
 		StatsCh:   "daily-stats",
