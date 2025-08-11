@@ -47,24 +47,6 @@ func schedule(start time.Time, interval time.Duration, job func()) {
 // midnight.
 func dailyReset() {
 	log.Info("Performing daily reset")
-	chID, err := session.GetChannelID(env.StatsCh)
-	if err != nil {
-		log.Warn("Invalid channel", "name", env.StatsCh)
-		return
-	}
-
-	// Get all stats recorded today and create messages for each.
-	entries, err := dal.Today.GetAll()
-	if err != nil {
-		log.Error("Failed to fetch", "tbl", dal.Today.Tbl, "err", err)
-	}
-
-	if len(entries) > 0 {
-		session.MsgSend(chID, "Today's Stats:")
-	}
-	for _, entry := range entries {
-		session.MsgSend(chID, entry.String())
-	}
 
 	// Delete all entries from the daily stats table. This is necessary, since we
 	// use primary key conflicts in the database layer to detect repeat
