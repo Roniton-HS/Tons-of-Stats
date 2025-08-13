@@ -123,7 +123,18 @@ func (s *Session) GetUserName(id string) (string, error) {
 		return "", err
 	}
 
-	return member.Nick, nil
+	if member.Nick != "" {
+		return member.Nick, nil
+	}
+	if member.User != nil {
+		if member.User.GlobalName != "" {
+			return member.User.GlobalName, nil
+		}
+		if member.User.Username != "" {
+			return member.User.Username, nil
+		}
+	}
+	return "Who dis?", nil
 }
 
 // GetChannelID returns the ID for the channel with the given name.
