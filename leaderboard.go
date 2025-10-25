@@ -230,7 +230,9 @@ func fmtStats(stats []*models.TotalStats) (rank []string, name []string, elo []s
 			if daily.EloChange > 0 {
 				prefix = "\x1b[32m+"
 			} else if daily.EloChange < 0 {
-				prefix = "\x1b[31m-"
+				// Negative numbers are already prefixed when printing. As a result,
+				// this only needs to provide coloring.
+				prefix = "\x1b[31m"
 			}
 			change = daily.EloChange
 		}
